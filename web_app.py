@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from app import call_model_with_retry
+# from app import call_model_with_retry
 import os
 import uvicorn
 
@@ -11,7 +11,9 @@ def root():
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
+    from app import call_model_with_retry
     return {"status": "ok"}
+
 
 
 
