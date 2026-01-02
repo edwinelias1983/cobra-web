@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>COBRA</title>
+
+<style>
+:root{
+  --bg:#000;
+  --fg:#eaeaea;
+  --panel:#121212;
+  --border:#2a2a2a;
+  --accent:#eaeaea;
+}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+body.paper{
+  --bg:#f6f1e8;
+  --fg:#1a1a1a;
+  --panel:#ede7dc;
+  --border:#c9c1b4;
+  font-family: "Courier New", Courier, monospace;
+}
+
+body.mono{
+  --bg:#050805;
+  --fg:#9dff9d;
+  --panel:#0b140b;
+  --border:#2f6b2f;
+  --accent:#9dff9d;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.container{
+  max-width:760px;
+  margin:60px auto;
+  padding:20px;
+}
+
+h1{
+  text-align:center;
+  letter-spacing:6px;
+}
+
+.subtitle{
+  text-align:center;
+  margin-bottom:20px;
+  opacity:.85;
+}
+
+.toggle{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  margin-bottom:30px;
+}
+
+.toggle button{
+  background:transparent;
+  color:var(--fg);
+  border:1px solid var(--border);
+  padding:6px 14px;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+.toggle button.active{
+  background:var(--fg);
+  color:var(--bg);
+}
+
+.panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:24px;
+}
+
+label{
+  display:block;
+  margin-top:18px;
+  margin-bottom:6px;
+}
+
+small{
+  display:block;
+  opacity:.75;
+  margin-bottom:6px;
+}
+
+textarea, select{
+  width:100%;
+  background:transparent;
+  color:var(--fg);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:10px;
+  resize:vertical;
+}
+
+button.primary{
+  margin-top:20px;
+  padding:8px 18px;
+  background:transparent;
+  color:var(--fg);
+  border:1px solid var(--border);
+  border-radius:8px;
+  cursor:pointer;
+}
+
+.note{
+  margin-top:18px;
+  font-size:13px;
+  opacity:.75;
+}
+</style>
+</head>
+
+<body class="obsidian">
+
+<div class="container">
+  <h1>COBRA</h1>
+  <div class="subtitle">Before anything else, we start exactly here.</div>
+
+  <div class="toggle">
+    <button onclick="setTheme('obsidian')" class="active">Obsidian</button>
+    <button onclick="setTheme('paper')">Paper</button>
+    <button onclick="setTheme('mono')">Mono</button>
+  </div>
+
+  <div class="panel">
+    <label>1 — What do you want to understand today?</label>
+    <textarea rows="3"></textarea>
+
+    <label>2 — What do you naturally understand or like?</label>
+    <small>
+      COBRA uses your existing symbols — the things that already make sense to you —
+      to explain new ideas in a way that fits your lived reality.
+    </small>
+    <textarea rows="3"></textarea>
+
+    <label>Interaction Mode</label>
+    <select>
+      <option>Adventure — I want to explore and see where this goes</option>
+      <option>Learner — I want a clear and solid understanding</option>
+      <option>Master — I want deep, precise mastery of this topic</option>
+    </select>
+
+    <label>4 — Whose voice is really easy for you to understand?</label>
+    <small>
+      Voice helps COBRA match tone, rhythm, and explanation style so learning feels natural,
+      not forced.
+    </small>
+    <textarea rows="2"></textarea>
+
+    <button class="primary">Begin</button>
+
+    <div class="note">
+      COBRA does not ask for abstract parameters.<br/>
+      Domain, phase, and symbols are inferred internally from your answers —
+      so learning starts from your world, not a preset system.
+    </div>
+  </div>
+</div>
+
+<script>
+function setTheme(t){
+  document.body.className = t;
+  document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.toggle button:nth-child(${t==='obsidian'?1:t==='paper'?2:3})`).classList.add('active');
+}
+</script>
+
+</body>
+</html>
