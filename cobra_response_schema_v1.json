@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cobra.example/schema/cobra-response-v1.json",
+  "title": "COBRA Response Schema V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "domain",
+    "phase",
+    "intent",
+    "text",
+    "symbols_used",
+    "introduced_new_symbols",
+    "micro_check",
+    "repair_required",
+    "stability_assessment",
+    "next_domain_recommendation"
+  ],
+  "properties": {
+    "domain": {
+      "type": "string",
+      "enum": [
+        "D0",
+        "D0B",
+        "D1",
+        "D2",
+        "D2B",
+        "D3",
+        "D3B",
+        "D4",
+        "D5",
+        "TRANSFER_CHECK",
+        "PHASE2_SELECT",
+        "PHASE2_STRESS",
+        "EXPANSION"
+      ]
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "PHASE1",
+        "PHASE2"
+      ]
+    },
+    "intent": {
+      "type": "string",
+      "enum": [
+        "QUESTION",
+        "EXPLANATION",
+        "MICRO_CHECK",
+        "REPAIR",
+        "TRANSFER_CHECK",
+        "PHASE2_CHOICE",
+        "STRESS_TEST",
+        "EXPANSION_INVITE",
+        "SUMMARY"
+      ]
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "symbols_used": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 0
+    },
+    "introduced_new_symbols": {
+      "type": "boolean"
+    },
+    "new_symbols_proposed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "media_suggestions": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "search_query",
+          "symbol_reference"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "gif",
+              "image"
+            ]
+          },
+          "search_query": {
+            "type": "string",
+            "minLength": 1
+          },
+          "symbol_reference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider_hint": {
+            "type": "string",
+            "enum": [
+              "giphy",
+              "tenor",
+              "unsplash",
+              "pexels",
+              "google",
+              "other"
+            ],
+            "default": "other"
+          }
+        }
+      }
+    },
+    "micro_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prompt",
+        "expected_response_type"
+      ],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_response_type": {
+          "type": "string",
+          "enum": [
+            "short_explanation",
+            "selection",
+            "one_sentence",
+            "yes_no",
+            "list_1_3"
+          ]
+        }
+      }
+    },
+    "repair_required": {
+      "type": "boolean"
+    },
+    "diagnostic_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_text",
+        "missing_elements"
+      ],
+      "properties": {
+        "original_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "missing_elements": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "stability_assessment": {
+      "type": "string",
+      "enum": [
+        "STABLE",
+        "UNSTABLE",
+        "UNKNOWN"
+      ]
+    },
+    "next_domain_recommendation": {
+      "type": "string",
+      "enum": [
+        "D0",
+        "D0B",
+        "D1",
+        "D2",
+        "D2B",
+        "D3",
+        "D3B",
+        "D4",
+        "D5",
+        "TRANSFER_CHECK",
+        "PHASE2_SELECT",
+        "PHASE2_STRESS",
+        "EXPANSION",
+        "END"
+      ]
+    },
+    "notes_for_orchestrator": {
+      "type": "string",
+      "default": ""
+    },
+    "symbol_universe": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "User-approved symbolic universe tokens (from Domain 0). Required for D1 and D2 responses."
+    },
+
+    "interaction_mode": {
+      "type": "string",
+      "enum": [
+        "learn",
+        "adventure",
+        "mastery"
+      ]
+    },
+    "current_domain": {
+      "type": "string"
+    },
+    "stamina_gate_available": {
+      "type": "boolean"
+    },
+    "consolidation_active": {
+      "type": "boolean"
+    },
+    "symbolic_universe": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "auditory_universe": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "domain": {
+            "enum": [
+              "D1",
+              "D2"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "symbol_universe"
+        ],
+        "properties": {
+          "symbol_universe": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "intent": {
+            "const": "REPAIR"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "diagnostic_mapping"
+        ]
+      }
+    }
+  ]
+}
