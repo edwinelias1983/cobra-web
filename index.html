@@ -171,6 +171,13 @@ pre{
 
     <pre id="output"></pre>
 
+    <!-- 🔹 ADDED: MICRO-CHECK RESPONSE UI -->
+    <div id="microCheckBox" style="display:none; margin-top:16px;">
+      <label>Quick check response</label>
+      <textarea id="microResponse" rows="2"></textarea>
+      <button class="primary" onclick="submitMicroCheck()">Continue</button>
+    </div>
+
     <div class="note">
       COBRA does not ask for abstract parameters.<br/>
       Domain, phase, and symbols are inferred internally from your answers —
@@ -245,9 +252,9 @@ Mode: ${mode}
     if (data.text) {
       out.textContent = data.text;
 
-      // Optional: show micro-check
       if (data.micro_check?.prompt) {
         out.textContent += "\n\n— Quick check —\n" + data.micro_check.prompt;
+        document.getElementById("microCheckBox").style.display = "block";
       }
     } else if (data.error) {
       out.textContent = "ERROR: " + data.message;
@@ -262,10 +269,24 @@ Mode: ${mode}
     btn.textContent = "Begin";
   }
 }
+
+// ----------------------------
+// ADDED: MICRO-CHECK HANDLER
+// ----------------------------
+function submitMicroCheck(){
+  const response = document.getElementById("microResponse").value.trim();
+  if (!response) return;
+
+  document.getElementById("output").textContent +=
+    "\n\nYour response:\n" + response;
+
+  document.getElementById("microCheckBox").style.display = "none";
+}
 </script>
 
 </body>
 </html>
+
 
 
 
