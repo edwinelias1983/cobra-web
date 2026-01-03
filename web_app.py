@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from app import call_model_with_retry
 
@@ -11,7 +11,7 @@ from pathlib import Path
 app = FastAPI()
 
 # ============================================================
-# PERSISTENT STORAGE (SQLite) — REAL DATA COLLECTION
+# PERSISTENT STORAGE (SQLite)
 # ============================================================
 
 DB_PATH = Path("cobra_data.sqlite")
@@ -69,19 +69,18 @@ def run_cobra(payload: dict):
             strict_schema=True,
         )
 
-        log_interaction(payload, response)
-        return response
-
     except Exception as e:
-        # CRITICAL FIX:
-        # Always return valid JSON so the frontend never crashes
+        # IMPORTANT: always return JSON
         error_response = {
             "error": "backend_failure",
             "message": str(e)
         }
-
         log_interaction(payload, error_response)
         return error_response
+
+    log_interaction(payload, response)
+    return response
+
 
 
 
