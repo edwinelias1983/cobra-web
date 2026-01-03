@@ -9,7 +9,7 @@ import time
 app = FastAPI()
 
 # ----------------------------
-# Logging helper (STEP 1 ONLY)
+# Logging helper
 # ----------------------------
 def log_interaction(payload, response_obj):
     record = {
@@ -33,7 +33,7 @@ def root():
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
-    return call_model_with_retry(
+    response = call_model_with_retry(
         prompt=payload["prompt"],
         expected_domain=payload["expected_domain"],
         expected_phase=payload["expected_phase"],
@@ -41,6 +41,9 @@ def run_cobra(payload: dict):
         strict_schema=True,
     )
 
+    log_interaction(payload, response)
+
+    return response
 
 
 
