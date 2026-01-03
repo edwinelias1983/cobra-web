@@ -208,7 +208,6 @@
       },
       "description": "User-approved symbolic universe tokens (from Domain 0). Required for D1 and D2 responses."
     },
-
     "interaction_mode": {
       "type": "string",
       "enum": [
@@ -235,22 +234,31 @@
       "additionalProperties": true
     }
   },
+
   "allOf": [
     {
       "if": {
         "properties": {
+          "domain": { "const": "D0" },
+          "phase": { "const": "PHASE1" }
+        }
+      },
+      "then": {
+        "properties": {
+          "intent": { "const": "EXPLANATION" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "domain": {
-            "enum": [
-              "D1",
-              "D2"
-            ]
+            "enum": ["D1", "D2"]
           }
         }
       },
       "then": {
-        "required": [
-          "symbol_universe"
-        ],
+        "required": ["symbol_universe"],
         "properties": {
           "symbol_universe": {
             "minItems": 1
@@ -267,10 +275,9 @@
         }
       },
       "then": {
-        "required": [
-          "diagnostic_mapping"
-        ]
+        "required": ["diagnostic_mapping"]
       }
     }
   ]
 }
+
