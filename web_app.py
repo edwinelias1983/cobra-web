@@ -61,8 +61,16 @@ def root():
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
     try:
+        # ----------------------------------------------------
+        # NEW: support micro-check continuation
+        # ----------------------------------------------------
+        prompt = payload["prompt"]
+
+        if payload.get("micro_response"):
+            prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
+
         response = call_model_with_retry(
-            prompt=payload["prompt"],
+            prompt=prompt,
             expected_domain=payload["expected_domain"],
             expected_phase=payload["expected_phase"],
             symbol_universe=payload.get("symbol_universe"),
