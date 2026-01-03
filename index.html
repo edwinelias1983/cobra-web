@@ -183,24 +183,39 @@ pre{
 function setTheme(t){
   document.body.className = t;
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
-  document.querySelector(`.toggle button:nth-child(${t==='obsidian'?1:t==='paper'?2:3})`).classList.add('active');
+  document.querySelector(`.toggle button:nth-child(${t==='obsidian'?1:t==='paper'?2:3})`)
+    .classList.add('active');
 }
 
 async function runCobra(){
+  const q1 = document.getElementById("q1").value.trim();
+  const q2 = document.getElementById("q2").value.trim();
+  const mode = document.getElementById("mode").value;
+  const voice = document.getElementById("voice").value.trim();
+
+  const out = document.getElementById("output");
+  const btn = document.querySelector("button.primary");
+
+  if (!q1 || !q2) {
+    out.textContent = "Please answer questions 1 and 2 before continuing.";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Working…";
+  out.textContent = "Thinking…";
+
   const payload = {
     prompt: `
-Q1: ${document.getElementById("q1").value}
-Q2: ${document.getElementById("q2").value}
-Mode: ${document.getElementById("mode").value}
-Voice: ${document.getElementById("voice").value}
+Q1: ${q1}
+Q2: ${q2}
+Mode: ${mode}
+Voice: ${voice}
     `,
     expected_domain: "D0",
     expected_phase: "P0",
     symbol_universe: []
   };
-
-  const out = document.getElementById("output");
-  out.textContent = "Thinking…";
 
   try{
     const res = await fetch("/cobra/run", {
@@ -213,6 +228,9 @@ Voice: ${document.getElementById("voice").value}
     out.textContent = JSON.stringify(data, null, 2);
   }catch(e){
     out.textContent = "ERROR: " + e.message;
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Begin";
   }
 }
 </script>
