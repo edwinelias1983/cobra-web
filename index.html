@@ -174,7 +174,9 @@ pre{
     <div class="note">
       COBRA does not ask for abstract parameters.<br/>
       Domain, phase, and symbols are inferred internally from your answers —
-      so learning starts from your world, not a preset system.
+      so learning starts from your world, not a preset system.<br/><br/>
+      By using this tool, you consent to anonymous interaction data being stored
+      for research and system improvement purposes.
     </div>
   </div>
 </div>
@@ -185,6 +187,18 @@ function setTheme(t){
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
   document.querySelector(`.toggle button:nth-child(${t==='obsidian'?1:t==='paper'?2:3})`)
     .classList.add('active');
+}
+
+// ----------------------------
+// Session ID (frontend)
+// ----------------------------
+function getSessionId(){
+  let sid = localStorage.getItem("cobra_session_id");
+  if (!sid) {
+    sid = crypto.randomUUID();
+    localStorage.setItem("cobra_session_id", sid);
+  }
+  return sid;
 }
 
 async function begin(){
@@ -206,6 +220,7 @@ async function begin(){
   out.textContent = "Thinking…";
 
   const payload = {
+    session_id: getSessionId(),
     prompt: `
 1) ${q1}
 2) ${q2}
