@@ -167,7 +167,7 @@ pre{
     </small>
     <textarea id="voice" rows="2"></textarea>
 
-    <button class="primary" onclick="runCobra()">Begin</button>
+    <button class="primary" onclick="begin()">Begin</button>
 
     <pre id="output"></pre>
 
@@ -187,7 +187,7 @@ function setTheme(t){
     .classList.add('active');
 }
 
-async function runCobra(){
+async function begin(){
   const q1 = document.getElementById("q1").value.trim();
   const q2 = document.getElementById("q2").value.trim();
   const mode = document.getElementById("mode").value;
@@ -207,13 +207,13 @@ async function runCobra(){
 
   const payload = {
     prompt: `
-Q1: ${q1}
-Q2: ${q2}
-Mode: ${mode}
+1) ${q1}
+2) ${q2}
 Voice: ${voice}
+Mode: ${mode}
     `,
     expected_domain: "D0",
-    expected_phase: "P0",
+    expected_phase: "INIT",
     symbol_universe: []
   };
 
@@ -237,4 +237,6 @@ Voice: ${voice}
 
 </body>
 </html>
+
+
 
