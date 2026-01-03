@@ -171,7 +171,6 @@ pre{
 
     <pre id="output"></pre>
 
-    <!-- 🔹 ADDED: MICRO-CHECK RESPONSE UI -->
     <div id="microCheckBox" style="display:none; margin-top:16px;">
       <label>Quick check response</label>
       <textarea id="microResponse" rows="2"></textarea>
@@ -197,9 +196,6 @@ function setTheme(t){
   ).classList.add('active');
 }
 
-// ----------------------------
-// Session ID (frontend)
-// ----------------------------
 function getSessionId(){
   let sid = localStorage.getItem("cobra_session_id");
   if (!sid) {
@@ -270,22 +266,54 @@ Mode: ${mode}
   }
 }
 
-// ----------------------------
-// ADDED: MICRO-CHECK HANDLER
-// ----------------------------
-function submitMicroCheck(){
+async function submitMicroCheck(){
   const response = document.getElementById("microResponse").value.trim();
   if (!response) return;
 
-  document.getElementById("output").textContent +=
-    "\n\nYour response:\n" + response;
-
   document.getElementById("microCheckBox").style.display = "none";
+  document.getElementById("output").textContent = "Thinking…";
+
+  const payload = {
+    session_id: getSessionId(),
+    prompt: "",
+    micro_response: response,
+    expected_domain: "D0",
+    expected_phase: "PHASE1",
+    symbol_universe: []
+  };
+
+  try {
+    const res = await fetch("/cobra/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.text) {
+      document.getElementById("output").textContent = data.text;
+
+      if (data.micro_check?.prompt) {
+        document.getElementById("output").textContent +=
+          "\n\n— Quick check —\n" + data.micro_check.prompt;
+        document.getElementById("microCheckBox").style.display = "block";
+      }
+    } else if (data.error) {
+      document.getElementById("output").textContent =
+        "ERROR: " + data.message;
+    }
+
+  } catch (e) {
+    document.getElementById("output").textContent =
+      "ERROR: " + e.message;
+  }
 }
 </script>
 
 </body>
 </html>
+
 
 
 
