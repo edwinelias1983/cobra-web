@@ -120,6 +120,13 @@ button.primary{
   font-size:13px;
   opacity:.75;
 }
+
+pre{
+  margin-top:20px;
+  white-space:pre-wrap;
+  font-size:13px;
+  opacity:.9;
+}
 </style>
 </head>
 
@@ -137,20 +144,20 @@ button.primary{
 
   <div class="panel">
     <label>1 — What do you want to understand today?</label>
-    <textarea rows="3"></textarea>
+    <textarea id="q1" rows="3"></textarea>
 
     <label>2 — What do you naturally understand or like?</label>
     <small>
       COBRA uses your existing symbols — the things that already make sense to you —
       to explain new ideas in a way that fits your lived reality.
     </small>
-    <textarea rows="3"></textarea>
+    <textarea id="q2" rows="3"></textarea>
 
     <label>Interaction Mode</label>
-    <select>
-      <option>Adventure — I want to explore and see where this goes</option>
-      <option>Learner — I want a clear and solid understanding</option>
-      <option>Master — I want deep, precise mastery of this topic</option>
+    <select id="mode">
+      <option value="adventure">Adventure — I want to explore and see where this goes</option>
+      <option value="learn">Learner — I want a clear and solid understanding</option>
+      <option value="mastery">Master — I want deep, precise mastery of this topic</option>
     </select>
 
     <label>4 — Whose voice is really easy for you to understand?</label>
@@ -158,9 +165,11 @@ button.primary{
       Voice helps COBRA match tone, rhythm, and explanation style so learning feels natural,
       not forced.
     </small>
-    <textarea rows="2"></textarea>
+    <textarea id="voice" rows="2"></textarea>
 
-    <button class="primary">Begin</button>
+    <button class="primary" onclick="runCobra()">Begin</button>
+
+    <pre id="output"></pre>
 
     <div class="note">
       COBRA does not ask for abstract parameters.<br/>
@@ -176,7 +185,38 @@ function setTheme(t){
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
   document.querySelector(`.toggle button:nth-child(${t==='obsidian'?1:t==='paper'?2:3})`).classList.add('active');
 }
+
+async function runCobra(){
+  const payload = {
+    prompt: `
+Q1: ${document.getElementById("q1").value}
+Q2: ${document.getElementById("q2").value}
+Mode: ${document.getElementById("mode").value}
+Voice: ${document.getElementById("voice").value}
+    `,
+    expected_domain: "D0",
+    expected_phase: "P0",
+    symbol_universe: []
+  };
+
+  const out = document.getElementById("output");
+  out.textContent = "Thinking…";
+
+  try{
+    const res = await fetch("/cobra/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    out.textContent = JSON.stringify(data, null, 2);
+  }catch(e){
+    out.textContent = "ERROR: " + e.message;
+  }
+}
 </script>
 
 </body>
 </html>
+
