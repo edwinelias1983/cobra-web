@@ -185,8 +185,9 @@ pre{
 function setTheme(t){
   document.body.className = t;
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
-  document.querySelector(`.toggle button:nth-child(${t==='obsidian'?1:t==='paper'?2:3})`)
-    .classList.add('active');
+  document.querySelector(
+    `.toggle button:nth-child(${t==='obsidian'?1:t==='paper'?2:3})`
+  ).classList.add('active');
 }
 
 // ----------------------------
@@ -232,7 +233,7 @@ Mode: ${mode}
     symbol_universe: []
   };
 
-  try{
+  try {
     const res = await fetch("/cobra/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -240,10 +241,23 @@ Mode: ${mode}
     });
 
     const data = await res.json();
-    out.textContent = JSON.stringify(data, null, 2);
-  }catch(e){
+
+    if (data.text) {
+      out.textContent = data.text;
+
+      // Optional: show micro-check
+      if (data.micro_check?.prompt) {
+        out.textContent += "\n\n— Quick check —\n" + data.micro_check.prompt;
+      }
+    } else if (data.error) {
+      out.textContent = "ERROR: " + data.message;
+    } else {
+      out.textContent = "Unexpected response format.";
+    }
+
+  } catch (e) {
     out.textContent = "ERROR: " + e.message;
-  }finally{
+  } finally {
     btn.disabled = false;
     btn.textContent = "Begin";
   }
