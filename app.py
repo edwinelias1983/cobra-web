@@ -39,6 +39,9 @@ Hard Rules:
 8) Return ONLY the corrected JSON object now.
 """
 
+# =========================
+# LLM CALL (JSON GUARDED)
+# =========================
 def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
     schema_str = json.dumps(COBRA_SCHEMA, ensure_ascii=False)
 
@@ -58,11 +61,35 @@ def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
             {"role": "user", "content": prompt},
         ],
         temperature=0.0,
-        response_format={"type": "json_object"},
     )
-    return response.choices[0].message.content
+
+    raw = response.choices[0].message.content
+
+    # ---------- JSON GUARD (NEW) ----------
+    try:
+        json.loads(raw)
+    except Exception:
+        # Force retry path instead of crashing
+        return json.dumps({
+            "domain": expected_domain,
+            "phase": expected_phase,
+            "intent": "REPAIR",
+            "introduced_new_symbols": False,
+            "repair_required": True,
+            "stability_assessment": "UNSTABLE",
+            "text": raw,
+            "micro_check": {
+                "prompt": "Please restate your response in valid JSON only.",
+                "expected_response_type": "json"
+            }
+        })
+
+    return raw
 
 
+# =========================
+# VALIDATION
+# =========================
 def validate_cobra_response(
     raw_text: str,
     expected_domain: str,
@@ -76,20 +103,17 @@ def validate_cobra_response(
     except Exception as e:
         return None, [f"Invalid JSON: {e}"]
 
-    # ---------- Schema validation ----------
     validator = Draft202012Validator(COBRA_SCHEMA)
     for err in sorted(validator.iter_errors(data), key=lambda e: e.path):
         path = ".".join([str(p) for p in err.path]) or "(root)"
         errors.append(f"Schema error at {path}: {err.message}")
 
-    # ---------- Domain / phase ----------
     if data.get("domain") != expected_domain:
         errors.append(f"Wrong domain: got {data.get('domain')} expected {expected_domain}")
 
     if data.get("phase") != expected_phase:
         errors.append(f"Wrong phase: got {data.get('phase')} expected {expected_phase}")
 
-    # ---------- SYMBOL ENFORCEMENT (FIXED) ----------
     if expected_domain in ("D1", "D2") and isinstance(symbol_universe, list):
         used = data.get("symbols_used", [])
 
@@ -104,7 +128,6 @@ def validate_cobra_response(
                 data["intent"] = "REPAIR"
                 data["repair_required"] = True
 
-        # Model is NOT allowed to redefine symbol_universe
         data["symbol_universe"] = symbol_universe
 
     if data.get("introduced_new_symbols") is True:
@@ -113,7 +136,9 @@ def validate_cobra_response(
     return (data if not errors else None), errors
 
 
-
+# =========================
+# RETRY WRAPPER
+# =========================
 def call_model_with_retry(
     prompt: str,
     expected_domain: str,
@@ -130,20 +155,6 @@ def call_model_with_retry(
         symbol_universe=symbol_universe,
     )
 
-    # ---------- STEP A: Enforce intent lock ----------
-    expected_intent = None
-    if isinstance(prompt, str):
-        for line in prompt.splitlines():
-            if line.strip().startswith("- intent:"):
-                expected_intent = line.split(":", 1)[1].strip()
-                break
-
-    if parsed is not None and expected_intent and parsed.get("intent") != expected_intent:
-        errors.append(
-            f"Intent mismatch: expected {expected_intent}, got {parsed.get('intent')}"
-        )
-
-    # ---------- Retry loop ----------
     attempts = 0
     while errors and attempts < max_retries:
         retry_prompt = RETRY_PROMPT_TEMPLATE.format(
@@ -160,65 +171,16 @@ def call_model_with_retry(
             symbol_universe=symbol_universe,
         )
 
-        if parsed is not None and expected_intent and parsed.get("intent") != expected_intent:
-            errors.append(
-                f"Intent mismatch: expected {expected_intent}, got {parsed.get('intent')}"
-            )
-
         attempts += 1
 
     if errors:
         raise ValueError("Model failed validation after retries: " + "; ".join(errors))
 
-    # ---------- STRICT SCHEMA GATE ----------
-    # DO NOT auto-repair when strict
-    if strict_schema:
-        return parsed
-
-    # ---------- STEP B: Auto-repair (non-strict only) ----------
-    if isinstance(symbol_universe, list) and symbol_universe:
-        parsed["symbol_universe"] = symbol_universe
-
-        used = parsed.get("symbols_used", [])
-        invalid = [s for s in used if s not in symbol_universe]
-
-        if invalid:
-            repair_prompt = (
-                "You MUST return a single valid JSON object that matches the COBRA Response Schema exactly.\n"
-                f"- domain: {expected_domain}\n"
-                f"- phase: {expected_phase}\n"
-                "- intent: REPAIR\n"
-                "- introduced_new_symbols: false\n"
-                "- repair_required: true\n"
-                "- stability_assessment: UNSTABLE\n"
-                f"- symbol_universe MUST be exactly this list (copy as-is): {symbol_universe}\n"
-                "- symbols_used MUST be a non-empty subset of symbol_universe\n"
-                "- You MUST include diagnostic_mapping with:\n"
-                "  - original_text\n"
-                "  - missing_elements\n"
-                "- Include EXACTLY ONE micro_check object\n\n"
-                f"PREVIOUS_INVALID_TEXT:\n{parsed.get('text','')}\n"
-            )
-
-            raw_repair = llm_call(repair_prompt, expected_domain, expected_phase)
-            repaired, repair_errors = validate_cobra_response(
-                raw_repair,
-                expected_domain,
-                expected_phase,
-                symbol_universe=symbol_universe,
-            )
-
-            if repair_errors or repaired is None:
-                raise ValueError("Repair failed validation: " + "; ".join(repair_errors))
-
-            repaired["symbol_universe"] = symbol_universe
-            return repaired
-
     return parsed
 
 
 # ============================================================
-# V6 COBRA STATE + STRUCTURAL GATES (APPENDED — NO STRUCTURE CHANGE)
+# V6 COBRA STATE + STRUCTURAL GATES (UNCHANGED)
 # ============================================================
 
 from enum import Enum
@@ -273,3 +235,4 @@ def maybe_add_presence_marker(state: CobraState, repair_event: bool) -> str | No
     if repair_event and state.interaction_mode == InteractionMode.mastery:
         return PRESENCE_MARKERS[0]
     return None
+
