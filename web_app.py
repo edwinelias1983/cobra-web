@@ -60,17 +60,28 @@ def root():
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
-    response = call_model_with_retry(
-        prompt=payload["prompt"],
-        expected_domain=payload["expected_domain"],
-        expected_phase=payload["expected_phase"],
-        symbol_universe=payload.get("symbol_universe"),
-        strict_schema=True,
-    )
+    try:
+        response = call_model_with_retry(
+            prompt=payload["prompt"],
+            expected_domain=payload["expected_domain"],
+            expected_phase=payload["expected_phase"],
+            symbol_universe=payload.get("symbol_universe"),
+            strict_schema=True,
+        )
 
-    log_interaction(payload, response)
+        log_interaction(payload, response)
+        return response
 
-    return response
+    except Exception as e:
+        # CRITICAL FIX:
+        # Always return valid JSON so the frontend never crashes
+        error_response = {
+            "error": "backend_failure",
+            "message": str(e)
+        }
+
+        log_interaction(payload, error_response)
+        return error_response
 
 
 
