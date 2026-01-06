@@ -2,8 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from app import (
     call_model_with_retry,          # V6 (kept, not removed)
-    call_model_with_retry_v7,       # V7 ADD
-    CobraState                      # V7 ADD
+    call_model_with_retry_v7,       # V7
+    CobraState,                     # V7
+    v7_state_domain_label           # V7: canonical domain label from server state
 )
 
 import json
@@ -62,7 +63,7 @@ def log_interaction(payload, response_obj):
         conn.commit()
 
 # ============================================================
-# V7 SESSION STATE HELPERS (ADD ONLY)
+# V7 SESSION STATE HELPERS
 # ============================================================
 
 def load_session_state(session_id: str) -> CobraState:
@@ -99,6 +100,36 @@ def save_session_state(session_id: str, state: CobraState):
         conn.commit()
 
 # ============================================================
+# V7 SERVER-AUTHORITATIVE DOMAIN/PHASE
+# ============================================================
+
+def server_expected_domain(state: CobraState) -> str:
+    # Canonical V7 label from server state (D0/D0B/D1/...)
+    return v7_state_domain_label(state)
+
+def server_expected_phase(state: CobraState) -> str:
+    # Server owns phase. Phase 2 only after Phase 1 transfer complete.
+    if getattr(state, "phase1_transfer_complete", False):
+        return "PHASE_2"
+    return "PHASE_1"
+
+def server_symbol_universe(payload: dict, state: CobraState):
+    # Prefer payload if provided, else attempt to derive from state (if stored there).
+    su = payload.get("symbol_universe")
+    if su is not None:
+        return su
+    if isinstance(state.symbolic_universe, dict):
+        # common storage patterns; falls back safely to None
+        return (
+            state.symbolic_universe.get("symbol_universe")
+            or state.symbolic_universe.get("symbols")
+            or None
+        )
+    if isinstance(state.symbolic_universe, list):
+        return state.symbolic_universe
+    return None
+
+# ============================================================
 # Routes
 # ============================================================
 
@@ -111,7 +142,7 @@ def root():
 def run_cobra(payload: dict):
     try:
         # ----------------------------------------------------
-        # V7 ADD: load per-session state
+        # V7: load per-session state (required)
         # ----------------------------------------------------
         session_id = payload.get("session_id")
         if not session_id:
@@ -120,32 +151,50 @@ def run_cobra(payload: dict):
         state = load_session_state(session_id)
 
         # ----------------------------------------------------
-        # Support micro-check continuation (UNCHANGED)
+        # Build prompt (micro-check continuation supported)
         # ----------------------------------------------------
         prompt = payload.get("prompt", "")
-
         if payload.get("micro_response"):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
 
         # ----------------------------------------------------
-        # V7 ADD: call V7 orchestrator (no removal of V6)
+        # V7: SERVER-AUTHORITATIVE expected_domain + expected_phase
+        # Ignore any client-supplied expected_domain/expected_phase
+        # ----------------------------------------------------
+        expected_domain = server_expected_domain(state)
+        expected_phase = server_expected_phase(state)
+
+        # ----------------------------------------------------
+        # V7: call orchestrator
         # ----------------------------------------------------
         response = call_model_with_retry_v7(
             prompt=prompt,
-            expected_domain=payload["expected_domain"],
-            expected_phase=payload["expected_phase"],
+            expected_domain=expected_domain,
+            expected_phase=expected_phase,
             state=state,
-            symbol_universe=payload.get("symbol_universe"),
+            symbol_universe=server_symbol_universe(payload, state),
         )
 
         # ----------------------------------------------------
-        # V7 ADD: inject advance gate + persist state
+        # V7: advance gate hardening (locking intents)
         # ----------------------------------------------------
         if isinstance(response, dict):
-            response.setdefault(
-                "advance_allowed",
-                bool(state.last_microcheck_passed and not state.consolidation_active)
-            )
+            intent = response.get("intent")
+            locking_intents = {
+                "MICRO_CHECK",
+                "REPAIR",
+                "TRANSFER_CHECK",
+                "STRESS_TEST",
+                "PHASE2_CHOICE",
+            }
+
+            if intent in locking_intents:
+                response["advance_allowed"] = False
+            else:
+                response.setdefault(
+                    "advance_allowed",
+                    bool(state.last_microcheck_passed and not state.consolidation_active)
+                )
 
         save_session_state(session_id, state)
 
