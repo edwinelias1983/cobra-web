@@ -519,7 +519,14 @@ def call_model_with_retry_v7(
 
     if state.consolidation_active:
         return v7_consolidation_response(state)
-
+        if (
+        expected_phase == "PHASE_1"
+        and v7_phase1_transfer_required(state)
+        and parsed.get("stability_assessment") == "STABLE"
+        and expected_domain == "D5"
+    ):
+        return v7_phase1_transfer_response(state)
+        
     return parsed
 
 # ============================================================
