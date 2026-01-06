@@ -79,7 +79,11 @@ def load_session_state(session_id: str) -> CobraState:
 
     try:
         data = json.loads(row[0])
-        return CobraState(**data)
+        state = CobraState()
+        for k, v in data.items():
+            if hasattr(state, k):
+                setattr(state, k, v)
+        return state
     except Exception:
         return CobraState()
 
