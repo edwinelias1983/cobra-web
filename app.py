@@ -451,21 +451,27 @@ def validate_cobra_response_v7(
     if errors or parsed is None:
         return None, errors
 
+    # Normalize parsed phase defensively
     if "phase" in parsed:
         parsed["phase"] = normalize_phase_token(parsed["phase"])
 
+    # Phase mismatch hard stop
     if parsed.get("phase") != normalize_phase_token(expected_phase):
         return None, [
             f"Wrong phase: got {parsed.get('phase')} expected {normalize_phase_token(expected_phase)}"
         ]
 
-    return parsed, []
-
-
+    # -----------------------------
+    # V7 HARD GATES (MUST RUN)
+    # -----------------------------
     try:
         v7_enforce_introduced_symbols(parsed)
         v7_enforce_media_domain(parsed)
-        v7_enforce_symbol_binding(parsed, expected_domain, symbol_universe if isinstance(symbol_universe, list) else None)
+        v7_enforce_symbol_binding(
+            parsed,
+            expected_domain,
+            symbol_universe if isinstance(symbol_universe, list) else None
+        )
         v7_enforce_microcheck_type(parsed, expected_domain)
         v7_enforce_summary_gate(parsed, expected_domain)
         v7_enforce_locking(parsed)
