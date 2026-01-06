@@ -373,10 +373,15 @@ def v7_enforce_introduced_symbols(parsed: dict):
         raise RuntimeError("[V7 VIOLATION] introduced_new_symbols must be false (unless explicitly allowed)")
 
 def v7_enforce_microcheck_type(parsed: dict, expected_domain: str):
+    # V7 RULE: Domain 0 has NO micro-check type enforcement
+    if expected_domain in ("D0", "D0B"):
+        return
+
     mc = parsed.get("micro_check", {})
     got_type = mc.get("expected_response_type")
-    want_type = v7_expected_microcheck_type(expected_domain)
-    if got_type != want_type:
+    want_type = V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain)
+
+    if want_type and got_type != want_type:
         raise RuntimeError(
             f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' for domain {expected_domain} (got '{got_type}')"
         )
