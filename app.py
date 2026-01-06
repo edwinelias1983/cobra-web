@@ -305,8 +305,8 @@ def v7_enforce_domain_progression(state: CobraState, expected_domain: str):
 
 def v7_expected_microcheck_type(expected_domain: str) -> str:
     if expected_domain in ("D0", "D0B"):
-        return "short_explanation"
-    return V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain, "short_explanation")
+        return "conceptual"
+    return V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain, "conceptual")
 
 def v7_block_generic_fallback_text(text: str):
     """
