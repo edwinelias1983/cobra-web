@@ -512,6 +512,21 @@ def call_model_with_retry_v7(
     V7 wrapper: enforces domain progression via state + validates with V7 invariants.
     Uses llm_call + retry loop.
     """
+    # ---------------------------
+    # V7 DOMAIN 0: RECORD ANSWERS
+    # ---------------------------
+    if state.interaction_mode is None and isinstance(prompt, dict):
+        state.interaction_mode = InteractionMode(prompt.get("interaction_mode"))
+
+        state.symbolic_universe["domain0"] = {
+            "want_to_understand": prompt.get("want_to_understand"),
+            "likes": prompt.get("likes"),
+        }
+
+    # V7 HARD STOP: Domain 0 enforcement (MANDATORY)
+    if v7_requires_domain0(state):
+        return v7_domain0_response()
+
         # V7 HARD STOP: Domain 0 enforcement (MANDATORY)
     if v7_requires_domain0(state):
         return v7_domain0_response()
