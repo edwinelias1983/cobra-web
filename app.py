@@ -524,8 +524,10 @@ def call_model_with_retry_v7(
         and v7_phase1_transfer_required(state)
         and parsed.get("stability_assessment") == "STABLE"
         and expected_domain == "D5"
-    ):
+   ):
+        state.phase1_transfer_complete = True
         return v7_phase1_transfer_response(state)
+
          # V7 PHASE 2: TOP-DOWN INVERSION ACTIVATION
     if (
         expected_phase == "PHASE_2"
