@@ -414,6 +414,14 @@ def v7_enforce_locking(parsed: dict):
         if parsed.get("advance_allowed") is True:
             raise RuntimeError("[V7 VIOLATION] advance_allowed must be false during MICRO_CHECK/REPAIR")
 
+def normalize_phase_token(phase: str) -> str:
+    if not phase:
+        return phase
+    phase = phase.strip().upper()
+    if phase.startswith("PHASE") and "_" not in phase:
+        return phase.replace("PHASE", "PHASE_")
+    return phase
+
 def validate_cobra_response_v7(
     raw_text: str,
     expected_domain: str,
@@ -428,7 +436,7 @@ def validate_cobra_response_v7(
     parsed, errors = validate_cobra_response(
         raw_text,
         expected_domain,
-        expected_phase,
+        normalize_phase_token(expected_phase),  # <-- ADDITION #2 (only change)
         symbol_universe=symbol_universe
     )
 
