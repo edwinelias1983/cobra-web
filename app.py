@@ -46,12 +46,16 @@ def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
     schema_str = json.dumps(COBRA_SCHEMA, ensure_ascii=False)
 
     system = (
-        "You are operating under the COBRA protocol. "
-        "You MUST output ONLY a single valid JSON object that validates against the provided schema. "
-        f"Required: domain must equal {expected_domain}; phase must equal {expected_phase}. "
-        "Do not include markdown, explanations, or code fences.\n\n"
-        "COBRA Response Schema V1 (authoritative):\n"
-        + schema_str
+    "You are operating under the COBRA protocol. "
+    "You MUST output ONLY a single valid JSON object that validates against the provided schema. "
+    f"Required: domain must equal {expected_domain}; phase must equal {expected_phase}. "
+    "DO NOT explain the system, domain, phase, or protocol. "
+    "DO NOT describe what you are doing. "
+    "DO NOT ask meta-questions about understanding the explanation. "
+    "Respond ONLY to the user’s content using their language and lived examples. "
+    "Do not include markdown, explanations, or code fences.\n\n"
+    "COBRA Response Schema V1 (authoritative):\n"
+    + schema_str
     )
 
     response = client.chat.completions.create(
