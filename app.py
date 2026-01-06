@@ -696,6 +696,54 @@ def v7_phase1_transfer_response(state: CobraState) -> dict:
         },
         "media_suggestions": []
     }
+# ============================================================
+# V7 REQUIRED: PHASE 2 TOP-DOWN INVERSION LOGIC
+# ============================================================
+
+PHASE2_DOMAIN_SEQUENCE = ["D4", "D3B", "D3", "D2B", "D2", "D1"]
+
+def v7_phase2_inversion_required(state: CobraState) -> bool:
+    """
+    Phase 2 runs only after Phase 1 transfer is complete.
+    """
+    return getattr(state, "phase1_transfer_complete", False)
+
+def v7_phase2_next_domain(state: CobraState) -> str | None:
+    """
+    Determines the next domain in top-down inversion order.
+    """
+    current = v7_state_domain_label(state)
+    if current not in PHASE2_DOMAIN_SEQUENCE:
+        return PHASE2_DOMAIN_SEQUENCE[0]
+
+    idx = PHASE2_DOMAIN_SEQUENCE.index(current)
+    if idx + 1 >= len(PHASE2_DOMAIN_SEQUENCE):
+        return None
+
+    return PHASE2_DOMAIN_SEQUENCE[idx + 1]
+
+def v7_phase2_prompt(state: CobraState) -> dict:
+    next_domain = v7_phase2_next_domain(state)
+    if not next_domain:
+        return {}
+
+    return {
+        "domain": next_domain,
+        "phase": "PHASE_2",
+        "intent": "EXPLANATION",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "UNKNOWN",
+        "text": (
+            "We are now mapping the formal concept back onto your existing understanding.\n\n"
+            "Explain how this formal idea connects to the structures you already built."
+        ),
+        "micro_check": {
+            "prompt": "Map the formal idea to your earlier symbols or metaphors.",
+            "expected_response_type": "conceptual"
+        },
+        "media_suggestions": []
+    }
 
 # ============================================================
 # V7 REQUIRED: INTERACTION MODE BEHAVIOR ENFORCEMENT
