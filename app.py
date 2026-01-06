@@ -224,6 +224,9 @@ class CobraState:
     symbolic_universe: dict = field(default_factory=dict)
     auditory_universe: dict = field(default_factory=dict)
 
+    phase2_depth_selected: bool = False
+    phase2_pressure_test: bool = False
+
 def maybe_offer_stamina_gate(state: CobraState) -> bool:
     if (
         state.last_microcheck_passed
@@ -647,11 +650,20 @@ D0B_QUESTIONS = [
 ]
 
 def v7_requires_domain0b(state: CobraState) -> bool:
-    return not state.auditory_universe
+    # V7: Domain 0B completion is explicit, not inferred
+    return not state.domain0b_complete
+
 
 def v7_domain0b_response(state: CobraState) -> dict:
+    # If already complete, no more questions
+    if state.domain0b_complete:
+        return {}
+
     asked = state.auditory_universe.get("_asked", 0)
+
+    # Safety: if all questions asked, mark complete
     if asked >= len(D0B_QUESTIONS):
+        state.domain0b_complete = True
         return {}
 
     question = D0B_QUESTIONS[asked]
@@ -671,6 +683,7 @@ def v7_domain0b_response(state: CobraState) -> dict:
         "media_suggestions": []
     }
 
+
 def v7_record_domain0b_answer(state: CobraState, answer: str):
     if "_asked" not in state.auditory_universe:
         state.auditory_universe["_asked"] = 0
@@ -678,6 +691,11 @@ def v7_record_domain0b_answer(state: CobraState, answer: str):
 
     state.auditory_universe["responses"].append(answer)
     state.auditory_universe["_asked"] += 1
+
+    # V7: explicit completion flag
+    if state.auditory_universe["_asked"] >= len(D0B_QUESTIONS):
+        state.domain0b_complete = True
+
 # ============================================================
 # V7 REQUIRED: STAMINA GATE + CONSOLIDATION MODE
 # ============================================================
