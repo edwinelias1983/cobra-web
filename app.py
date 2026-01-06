@@ -300,7 +300,9 @@ def v7_enforce_domain_progression(state: CobraState, expected_domain: str):
         raise RuntimeError(f"[V7 VIOLATION] Illegal domain jump: {current} → {expected_domain}")
 
 def v7_expected_microcheck_type(expected_domain: str) -> str:
-    return V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain, "conceptual")
+    if expected_domain in ("D0", "D0B"):
+        return "short_explanation"
+    return V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain, "short_explanation")
 
 def v7_block_generic_fallback_text(text: str):
     """
