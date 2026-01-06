@@ -216,6 +216,7 @@ class Domain(str, Enum):
 @dataclass
 class CobraState:
     interaction_mode: InteractionMode | None = None
+    domain0_complete: bool = False
     current_domain: Domain = Domain.D0
     stamina_used: bool = False
     consolidation_active: bool = False
