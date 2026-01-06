@@ -752,6 +752,42 @@ def v7_phase2_prompt(state: CobraState) -> dict:
         },
         "media_suggestions": []
     }
+# ============================================================
+# V7 REQUIRED: PHASE 2 STRESS-TEST MODES
+# ============================================================
+
+STRESS_TEST_MODES = {
+    "metaphor": "Explain the formal concept again using a metaphor from your symbolic universe.",
+    "boundary": "Where does this concept stop working? What assumptions must hold?",
+    "objection": "What is the strongest objection or critique of this idea?",
+    "transfer": "Apply this concept in a different context. What stays the same?"
+}
+
+def v7_phase2_stress_test_required(state: CobraState) -> bool:
+    return getattr(state, "phase2_active", False)
+
+def v7_phase2_stress_test_prompt(state: CobraState) -> dict:
+    options = "\n".join(
+        [f"• {k}: {v}" for k, v in STRESS_TEST_MODES.items()]
+    )
+
+    return {
+        "domain": v7_state_domain_label(state),
+        "phase": "PHASE_2",
+        "intent": "STRESS_TEST",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "UNKNOWN",
+        "text": (
+            "Choose ONE way to pressure-test your understanding:\n\n"
+            f"{options}"
+        ),
+        "micro_check": {
+            "prompt": "Select one option and respond accordingly.",
+            "expected_response_type": "conceptual"
+        },
+        "media_suggestions": []
+    }
 
 # ============================================================
 # V7 REQUIRED: INTERACTION MODE BEHAVIOR ENFORCEMENT
