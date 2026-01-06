@@ -619,7 +619,7 @@ INTERACTION_MODE_PROMPT = (
 )
 
 def v7_requires_domain0(state: CobraState) -> bool:
-    return state.interaction_mode is None or not state.symbolic_universe
+    return not state.domain0_complete
 
 def v7_domain0_response() -> dict:
     return {
