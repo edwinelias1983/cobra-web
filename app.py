@@ -236,3 +236,159 @@ def maybe_add_presence_marker(state: CobraState, repair_event: bool) -> str | No
         return PRESENCE_MARKERS[0]
     return None
 
+
+# ============================================================
+# V7 ADDITIONS (NO DELETIONS / NO REFACTOR)
+# ============================================================
+
+# V7 ADD: canonical domain sequence (protocol order)
+V7_DOMAIN_SEQUENCE = ["D0", "D0B", "D1", "D2", "D2B", "D3", "D3B", "D4", "D5"]
+
+# V7 ADD: map your existing enum values to V7 canonical labels
+V7_DOMAIN_CANONICAL_MAP = {
+    "domain_0": "D0",
+    "domain_0b": "D0B",
+    "domain_1": "D1",
+    "domain_2": "D2",
+    "domain_2b": "D2B",
+    "domain_3": "D3",
+    "domain_3b": "D3B",
+    "domain_4": "D4",
+    "domain_5": "D5",
+}
+
+# V7 ADD: expected micro-check response type by domain (representation lock)
+V7_MICROCHECK_TYPE_BY_DOMAIN = {
+    "D1": "symbolic",
+    "D2": "metaphoric",
+    "D2B": "analogy",
+    "D3": "pattern",
+    "D3B": "temporal",
+    "D4": "systemic",
+    "D5": "paradox",
+}
+
+def v7_canonical_domain(domain_value: str) -> str:
+    return V7_DOMAIN_CANONICAL_MAP.get(domain_value, domain_value)
+
+def v7_enforce_domain_progression(state: CobraState, expected_domain: str):
+    """
+    expected_domain here should be a V7 label (D0/D0B/D1/...)
+    This guard uses state.current_domain (your enum values) and maps it to V7 labels.
+    """
+    current = v7_canonical_domain(state.current_domain.value if hasattr(state.current_domain, "value") else str(state.current_domain))
+    if current not in V7_DOMAIN_SEQUENCE or expected_domain not in V7_DOMAIN_SEQUENCE:
+        return
+    ci = V7_DOMAIN_SEQUENCE.index(current)
+    ni = V7_DOMAIN_SEQUENCE.index(expected_domain)
+    if ni not in (ci, ci + 1):
+        raise RuntimeError(f"[V7 VIOLATION] Illegal domain jump: {current} → {expected_domain}")
+
+def v7_expected_microcheck_type(expected_domain: str) -> str:
+    return V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain, "conceptual")
+
+def v7_block_generic_fallback_text(text: str):
+    """
+    Hard stop if the model outputs definition-style fallback even if JSON/schema-valid.
+    """
+    t = (text or "").lower()
+    forbidden = [
+        "is a fundamental theory",
+        "can be defined as",
+        "refers to",
+        "in simple terms",
+        "is the study of",
+    ]
+    if any(p in t for p in forbidden):
+        raise RuntimeError("[V7 VIOLATION] Generic fallback detected in text")
+
+def validate_cobra_response_v7(
+    raw_text: str,
+    expected_domain: str,
+    expected_phase: str,
+    state: CobraState,
+    symbol_universe=None
+):
+    """
+    V7 wrapper: uses your existing validate_cobra_response, then adds V7 hard gates.
+    No changes to the original function.
+    """
+    parsed, errors = validate_cobra_response(
+        raw_text,
+        expected_domain,
+        expected_phase,
+        symbol_universe=symbol_universe
+    )
+
+    # If schema/base validation already failed, return as-is.
+    if errors or parsed is None:
+        return None, errors
+
+    # V7 ADD: micro_check representation lock
+    mc = parsed.get("micro_check", {})
+    got_type = mc.get("expected_response_type")
+    want_type = v7_expected_microcheck_type(expected_domain)
+    if got_type != want_type:
+        return None, [f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' for domain {expected_domain} (got '{got_type}')"]
+
+    # V7 ADD: hard block generic fallback
+    try:
+        v7_block_generic_fallback_text(parsed.get("text", ""))
+    except RuntimeError as e:
+        return None, [str(e)]
+
+    # V7 ADD: summary gate (do not allow SUMMARY until D5)
+    if parsed.get("intent") == "SUMMARY" and expected_domain != "D5":
+        return None, ["[V7 VIOLATION] SUMMARY not allowed before D5"]
+
+    return parsed, []
+
+def call_model_with_retry_v7(
+    prompt: str,
+    expected_domain: str,
+    expected_phase: str,
+    state: CobraState,
+    symbol_universe=None,
+    max_retries: int = 2,
+):
+    """
+    V7 wrapper: enforces domain progression via state + validates with V7 invariants.
+    No changes to your original call_model_with_retry.
+    """
+    v7_enforce_domain_progression(state, expected_domain)
+
+    raw = llm_call(prompt, expected_domain, expected_phase)
+    parsed, errors = validate_cobra_response_v7(
+        raw,
+        expected_domain,
+        expected_phase,
+        state=state,
+        symbol_universe=symbol_universe
+    )
+
+    attempts = 0
+    while errors and attempts < max_retries:
+        retry_prompt = RETRY_PROMPT_TEMPLATE.format(
+            VALIDATION_ERRORS="\n- ".join(errors),
+            EXPECTED_DOMAIN=expected_domain,
+            EXPECTED_PHASE=expected_phase,
+        )
+
+        raw = llm_call(retry_prompt, expected_domain, expected_phase)
+        parsed, errors = validate_cobra_response_v7(
+            raw,
+            expected_domain,
+            expected_phase,
+            state=state,
+            symbol_universe=symbol_universe
+        )
+
+        attempts += 1
+
+    if errors:
+        raise ValueError("Model failed V7 validation after retries: " + "; ".join(errors))
+
+    # Update state domain only after successful V7-validated response
+    # (state.current_domain uses your enum values; we map expected_domain back if needed)
+    # We do NOT mutate your enum; we only advance when caller advances expected_domain.
+    return parsed
