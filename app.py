@@ -517,7 +517,7 @@ def call_model_with_retry_v7(
     # V7 HARD STOP: DOMAIN 0
     # Only block if Domain 0 answers have NOT been recorded yet
     # ---------------------------
-    if state.interaction_mode is None:
+    if not state.interaction_mode is None:
         return v7_domain0_response()
 
     v7_enforce_domain_progression(state, expected_domain)
