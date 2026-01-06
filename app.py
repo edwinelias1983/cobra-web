@@ -511,3 +511,44 @@ def call_model_with_retry_v7(
     v7_set_state_domain_after_success(state, expected_domain)
 
     return parsed
+
+# ============================================================
+# V7 REQUIRED: DOMAIN 0 ENFORCEMENT (MANDATORY FIRST STEP)
+# ============================================================
+
+D0_Q1 = "What do you want to understand today?"
+D0_Q2 = (
+    "What do you naturally understand or like? "
+    "(sports, shows, music, games, hobbies, cultural references, memes, skills, etc.)"
+)
+
+INTERACTION_MODE_PROMPT = (
+    "Choose an interaction mode:\n"
+    "• Learn — guided understanding with gentle repair\n"
+    "• Adventure — exploratory movement with delayed correction\n"
+    "• Mastery — strict verification, immediate repair, and transfer enforcement"
+)
+
+def v7_requires_domain0(state: CobraState) -> bool:
+    return state.interaction_mode is None or not state.symbolic_universe
+
+def v7_domain0_response() -> dict:
+    return {
+        "domain": "D0",
+        "phase": "PHASE_1",
+        "intent": "QUESTION",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "UNKNOWN",
+        "text": (
+            f"{D0_Q1}\n\n"
+            f"{D0_Q2}\n\n"
+            f"{INTERACTION_MODE_PROMPT}"
+        ),
+        "micro_check": {
+            "prompt": "Answer the questions above.",
+            "expected_response_type": "conceptual"
+        },
+        "media_suggestions": []
+    }
+
