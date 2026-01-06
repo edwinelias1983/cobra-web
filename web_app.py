@@ -32,7 +32,6 @@ def init_db():
             response TEXT
         )
         """)
-        # V7 ADD: per-session state storage
         conn.execute("""
         CREATE TABLE IF NOT EXISTS cobra_sessions (
             session_id TEXT PRIMARY KEY,
@@ -108,22 +107,18 @@ def save_session_state(session_id: str, state: CobraState):
 # ============================================================
 
 def server_expected_domain(state: CobraState) -> str:
-    # Canonical V7 label from server state (D0/D0B/D1/...)
     return v7_state_domain_label(state)
 
 def server_expected_phase(state: CobraState) -> str:
-    # Server owns phase. Phase 2 only after Phase 1 transfer complete.
     if getattr(state, "phase1_transfer_complete", False):
         return "PHASE_2"
     return "PHASE_1"
 
 def server_symbol_universe(payload: dict, state: CobraState):
-    # Prefer payload if provided, else attempt to derive from state (if stored there).
     su = payload.get("symbol_universe")
     if su is not None:
         return su
     if isinstance(state.symbolic_universe, dict):
-        # common storage patterns; falls back safely to None
         return (
             state.symbolic_universe.get("symbol_universe")
             or state.symbolic_universe.get("symbols")
@@ -146,13 +141,29 @@ def root():
 def run_cobra(payload: dict):
     try:
         # ----------------------------------------------------
-        # V7: load per-session state (required)
+        # Load per-session state
         # ----------------------------------------------------
         session_id = payload.get("session_id")
         if not session_id:
             raise HTTPException(status_code=400, detail="Missing session_id")
 
         state = load_session_state(session_id)
+
+        # ----------------------------------------------------
+        # V7: DOMAIN 0 INITIALIZATION (API BOUNDARY)
+        # ----------------------------------------------------
+        if not state.domain0_complete:
+            if (
+                "interaction_mode" in payload
+                and "want_to_understand" in payload
+                and "likes" in payload
+            ):
+                state.interaction_mode = payload["interaction_mode"]
+                state.symbolic_universe["domain0"] = {
+                    "want_to_understand": payload["want_to_understand"],
+                    "likes": payload["likes"],
+                }
+                state.domain0_complete = True
 
         # ----------------------------------------------------
         # Build prompt (micro-check continuation supported)
@@ -162,14 +173,13 @@ def run_cobra(payload: dict):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
 
         # ----------------------------------------------------
-        # V7: SERVER-AUTHORITATIVE expected_domain + expected_phase
-        # Ignore any client-supplied expected_domain/expected_phase
+        # Server-authoritative domain + phase
         # ----------------------------------------------------
         expected_domain = server_expected_domain(state)
         expected_phase = server_expected_phase(state)
 
         # ----------------------------------------------------
-        # V7: call orchestrator
+        # Call V7 orchestrator
         # ----------------------------------------------------
         response = call_model_with_retry_v7(
             prompt=prompt,
@@ -180,7 +190,7 @@ def run_cobra(payload: dict):
         )
 
         # ----------------------------------------------------
-        # V7: advance gate hardening (locking intents)
+        # Advance gate hardening
         # ----------------------------------------------------
         if isinstance(response, dict):
             intent = response.get("intent")
