@@ -509,6 +509,7 @@ def call_model_with_retry_v7(
 
     # V7 ENFORCEMENT: advance state only after success
     v7_set_state_domain_after_success(state, expected_domain)
+    v7_apply_interaction_mode_constraints(state, parsed)
 
     return parsed
 
@@ -601,4 +602,88 @@ def v7_record_domain0b_answer(state: CobraState, answer: str):
 
     state.auditory_universe["responses"].append(answer)
     state.auditory_universe["_asked"] += 1
+# ============================================================
+# V7 REQUIRED: STAMINA GATE + CONSOLIDATION MODE
+# ============================================================
+
+STAMINA_PROMPT = (
+    "Before continuing, do you want to:\n"
+    "• continue at this depth\n"
+    "• pause and consolidate\n"
+    "• stop here and resume later?"
+)
+
+def v7_stamina_gate_response(state: CobraState) -> dict:
+    return {
+        "domain": v7_state_domain_label(state),
+        "phase": "PHASE_1",
+        "intent": "PHASE2_CHOICE",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "STABLE",
+        "text": STAMINA_PROMPT,
+        "micro_check": {
+            "prompt": "Choose one option.",
+            "expected_response_type": "conceptual"
+        },
+        "media_suggestions": []
+    }
+
+def v7_consolidation_response(state: CobraState) -> dict:
+    return {
+        "domain": v7_state_domain_label(state),
+        "phase": "PHASE_1",
+        "intent": "SUMMARY",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "STABLE",
+        "text": (
+            "We are consolidating.\n\n"
+            "What is stable:\n"
+            "- Core structure established\n\n"
+            "What remains open:\n"
+            "- Further refinement or transfer"
+        ),
+        "micro_check": {
+            "prompt": "Does this summary match your understanding?",
+            "expected_response_type": "conceptual"
+        },
+        "media_suggestions": []
+    }
+
+# ============================================================
+# V7 REQUIRED: INTERACTION MODE BEHAVIOR ENFORCEMENT
+# ============================================================
+
+def v7_apply_interaction_mode_constraints(
+    state: CobraState,
+    parsed_response: dict
+):
+    """
+    Modifies enforcement behavior based on interaction_mode.
+    This does NOT change domain order or truth conditions.
+    """
+
+    mode = state.interaction_mode
+    intent = parsed_response.get("intent")
+
+    # LEARN MODE
+    if mode == InteractionMode.learn:
+        # allow mild imprecision; do not hard-block on first instability
+        if parsed_response.get("stability_assessment") == "UNSTABLE":
+            parsed_response["repair_required"] = True
+            parsed_response.setdefault("advance_allowed", False)
+
+    # ADVENTURE MODE
+    elif mode == InteractionMode.adventure:
+        # allow temporary instability unless it violates logic
+        if intent not in ("REPAIR", "MICRO_CHECK"):
+            parsed_response.setdefault("advance_allowed", True)
+
+    # MASTERY MODE
+    elif mode == InteractionMode.mastery:
+        # strict: block advancement on ANY instability
+        if parsed_response.get("stability_assessment") != "STABLE":
+            parsed_response["repair_required"] = True
+            parsed_response["advance_allowed"] = False
 
