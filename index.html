@@ -205,6 +205,51 @@ function getSessionId(){
   return sid;
 }
 
+/* =========================
+   V7 ADD: Rolling render (segments) + micro-check label
+   NO deletions: falls back to original text behavior
+   ========================= */
+function renderCobraResponse(data){
+  const out = document.getElementById("output");
+
+  // Original behavior: show text
+  // V7 addition: if segments exist, render them in order (rolling screen)
+  if (Array.isArray(data.segments) && data.segments.length > 0) {
+    out.textContent = "";
+    data.segments.forEach(seg => {
+      if (seg && typeof seg.content === "string" && seg.content.trim().length > 0) {
+        out.textContent += seg.content + "\n\n";
+      }
+    });
+    out.textContent = out.textContent.trim();
+  } else if (data.text) {
+    out.textContent = data.text;
+  } else {
+    out.textContent = "Unexpected response format.";
+  }
+
+  // Preserve original micro-check display behavior, but add type label
+  if (data.micro_check?.prompt) {
+    out.textContent +=
+      "\n\n— Quick check (" +
+      (data.micro_check.expected_response_type || "response") +
+      ") —\n" + data.micro_check.prompt;
+    document.getElementById("microCheckBox").style.display = "block";
+  } else {
+    document.getElementById("microCheckBox").style.display = "none";
+  }
+
+  /* =========================
+     V7 ADD (ONLY NEW ADDITION):
+     Respect advance_allowed gate.
+     This does NOT change any other logic.
+     ========================= */
+  if (data.advance_allowed === false) {
+    document.getElementById("microCheckBox").style.display =
+      data.micro_check ? "block" : "none";
+  }
+}
+
 async function begin(){
   const q1 = document.getElementById("q1").value.trim();
   const q2 = document.getElementById("q2").value.trim();
@@ -245,15 +290,11 @@ Mode: ${mode}
 
     const data = await res.json();
 
-    if (data.text) {
-      out.textContent = data.text;
-
-      if (data.micro_check?.prompt) {
-        out.textContent += "\n\n— Quick check —\n" + data.micro_check.prompt;
-        document.getElementById("microCheckBox").style.display = "block";
-      }
+    // Preserve original branching, but route through render helper
+    if (data.text || (Array.isArray(data.segments) && data.segments.length > 0)) {
+      renderCobraResponse(data);
     } else if (data.error) {
-      out.textContent = "ERROR: " + data.message;
+      out.textContent = "ERROR: " + (data.message || "Unknown error");
     } else {
       out.textContent = "Unexpected response format.";
     }
@@ -273,6 +314,7 @@ async function submitMicroCheck(){
   document.getElementById("microCheckBox").style.display = "none";
   document.getElementById("output").textContent = "Thinking…";
 
+  // NO omission: keep original payload fields exactly (plus micro_response)
   const payload = {
     session_id: getSessionId(),
     prompt: "",
@@ -291,17 +333,13 @@ async function submitMicroCheck(){
 
     const data = await res.json();
 
-    if (data.text) {
-      document.getElementById("output").textContent = data.text;
-
-      if (data.micro_check?.prompt) {
-        document.getElementById("output").textContent +=
-          "\n\n— Quick check —\n" + data.micro_check.prompt;
-        document.getElementById("microCheckBox").style.display = "block";
-      }
+    // Preserve original behavior and micro-check loop
+    if (data.text || (Array.isArray(data.segments) && data.segments.length > 0)) {
+      renderCobraResponse(data);
+      // preserve prior behavior: keep showing microCheckBox if prompt exists (renderCobraResponse handles this)
     } else if (data.error) {
       document.getElementById("output").textContent =
-        "ERROR: " + data.message;
+        "ERROR: " + (data.message || "Unknown error");
     }
 
   } catch (e) {
@@ -313,9 +351,3 @@ async function submitMicroCheck(){
 
 </body>
 </html>
-
-
-
-
-
-
