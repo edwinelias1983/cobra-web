@@ -257,6 +257,9 @@ V7_DOMAIN_CANONICAL_MAP = {
     "domain_5": "D5",
 }
 
+# V7 ADD: reverse map (V7 label -> enum value string)
+V7_DOMAIN_REVERSE_MAP = {v: k for k, v in V7_DOMAIN_CANONICAL_MAP.items()}
+
 # V7 ADD: expected micro-check response type by domain (representation lock)
 V7_MICROCHECK_TYPE_BY_DOMAIN = {
     "D1": "symbolic",
@@ -268,15 +271,27 @@ V7_MICROCHECK_TYPE_BY_DOMAIN = {
     "D5": "paradox",
 }
 
+# V7 ADD: intents that should not allow advance unless explicitly set
+V7_LOCKING_INTENTS = {"MICRO_CHECK", "REPAIR"}
+
 def v7_canonical_domain(domain_value: str) -> str:
     return V7_DOMAIN_CANONICAL_MAP.get(domain_value, domain_value)
 
+def v7_state_domain_label(state: CobraState) -> str:
+    """
+    Returns canonical V7 label for current state domain.
+    """
+    try:
+        return v7_canonical_domain(state.current_domain.value)
+    except Exception:
+        return v7_canonical_domain(str(state.current_domain))
+
 def v7_enforce_domain_progression(state: CobraState, expected_domain: str):
     """
-    expected_domain here should be a V7 label (D0/D0B/D1/...)
-    This guard uses state.current_domain (your enum values) and maps it to V7 labels.
+    expected_domain should be V7 label (D0/D0B/D1/...)
+    Enforces: stay or advance by exactly one domain step.
     """
-    current = v7_canonical_domain(state.current_domain.value if hasattr(state.current_domain, "value") else str(state.current_domain))
+    current = v7_state_domain_label(state)
     if current not in V7_DOMAIN_SEQUENCE or expected_domain not in V7_DOMAIN_SEQUENCE:
         return
     ci = V7_DOMAIN_SEQUENCE.index(current)
@@ -298,9 +313,85 @@ def v7_block_generic_fallback_text(text: str):
         "refers to",
         "in simple terms",
         "is the study of",
+        "a branch of",
     ]
     if any(p in t for p in forbidden):
         raise RuntimeError("[V7 VIOLATION] Generic fallback detected in text")
+
+def v7_enforce_media_domain(parsed: dict):
+    """
+    media_suggestions must be array and only allowed for D1/D2.
+    """
+    dom = parsed.get("domain")
+    media = parsed.get("media_suggestions", [])
+    if media is None:
+        return
+    if not isinstance(media, list):
+        raise RuntimeError("[V7 VIOLATION] media_suggestions must be an array")
+    if media and dom not in ("D1", "D2"):
+        raise RuntimeError("[V7 VIOLATION] media_suggestions only allowed in D1 or D2")
+
+def v7_enforce_symbol_binding(parsed: dict, expected_domain: str, symbol_universe: list | None):
+    """
+    If in D1 or D2:
+      - symbol_universe must exist and be non-empty
+      - symbols_used must be list
+      - symbols_used ⊆ symbol_universe
+    """
+    if expected_domain not in ("D1", "D2"):
+        return
+
+    su = parsed.get("symbol_universe", None)
+    used = parsed.get("symbols_used", None)
+
+    # prefer passed-in symbol_universe (controller truth)
+    if isinstance(symbol_universe, list):
+        su = symbol_universe
+
+    if not isinstance(su, list) or len(su) == 0:
+        raise RuntimeError("[V7 VIOLATION] symbol_universe must be non-empty in D1/D2")
+
+    if not isinstance(used, list):
+        raise RuntimeError("[V7 VIOLATION] symbols_used must be an array")
+
+    # You may choose to require non-empty used. (V7 grounding)
+    if len(used) == 0:
+        raise RuntimeError("[V7 VIOLATION] symbols_used must be non-empty in D1/D2")
+
+    invalid = [s for s in used if s not in su]
+    if invalid:
+        raise RuntimeError(f"[V7 VIOLATION] symbols_used contains items not in symbol_universe: {invalid}")
+
+def v7_enforce_introduced_symbols(parsed: dict):
+    """
+    introduced_new_symbols must be false unless explicitly allowed upstream.
+    Schema allows boolean; V7 enforcement rejects True.
+    """
+    if parsed.get("introduced_new_symbols") is True:
+        raise RuntimeError("[V7 VIOLATION] introduced_new_symbols must be false (unless explicitly allowed)")
+
+def v7_enforce_microcheck_type(parsed: dict, expected_domain: str):
+    mc = parsed.get("micro_check", {})
+    got_type = mc.get("expected_response_type")
+    want_type = v7_expected_microcheck_type(expected_domain)
+    if got_type != want_type:
+        raise RuntimeError(
+            f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' for domain {expected_domain} (got '{got_type}')"
+        )
+
+def v7_enforce_summary_gate(parsed: dict, expected_domain: str):
+    if parsed.get("intent") == "SUMMARY" and expected_domain != "D5":
+        raise RuntimeError("[V7 VIOLATION] SUMMARY not allowed before D5")
+
+def v7_enforce_locking(parsed: dict):
+    """
+    If intent is MICRO_CHECK or REPAIR, advance_allowed must be false when present.
+    This supports your “stay here” behavior.
+    """
+    intent = parsed.get("intent")
+    if intent in V7_LOCKING_INTENTS:
+        if parsed.get("advance_allowed") is True:
+            raise RuntimeError("[V7 VIOLATION] advance_allowed must be false during MICRO_CHECK/REPAIR")
 
 def validate_cobra_response_v7(
     raw_text: str,
@@ -311,7 +402,7 @@ def validate_cobra_response_v7(
 ):
     """
     V7 wrapper: uses your existing validate_cobra_response, then adds V7 hard gates.
-    No changes to the original function.
+    No changes to the original validate_cobra_response.
     """
     parsed, errors = validate_cobra_response(
         raw_text,
@@ -324,24 +415,31 @@ def validate_cobra_response_v7(
     if errors or parsed is None:
         return None, errors
 
-    # V7 ADD: micro_check representation lock
-    mc = parsed.get("micro_check", {})
-    got_type = mc.get("expected_response_type")
-    want_type = v7_expected_microcheck_type(expected_domain)
-    if got_type != want_type:
-        return None, [f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' for domain {expected_domain} (got '{got_type}')"]
-
-    # V7 ADD: hard block generic fallback
     try:
+        v7_enforce_introduced_symbols(parsed)
+        v7_enforce_media_domain(parsed)
+        v7_enforce_symbol_binding(parsed, expected_domain, symbol_universe if isinstance(symbol_universe, list) else None)
+        v7_enforce_microcheck_type(parsed, expected_domain)
+        v7_enforce_summary_gate(parsed, expected_domain)
+        v7_enforce_locking(parsed)
         v7_block_generic_fallback_text(parsed.get("text", ""))
     except RuntimeError as e:
         return None, [str(e)]
 
-    # V7 ADD: summary gate (do not allow SUMMARY until D5)
-    if parsed.get("intent") == "SUMMARY" and expected_domain != "D5":
-        return None, ["[V7 VIOLATION] SUMMARY not allowed before D5"]
-
     return parsed, []
+
+def v7_set_state_domain_after_success(state: CobraState, expected_domain: str):
+    """
+    Advance state.current_domain to match expected_domain (V7 label).
+    This is the enforcement hook that actually makes progression real.
+    """
+    enum_value = V7_DOMAIN_REVERSE_MAP.get(expected_domain)
+    if not enum_value:
+        return
+    try:
+        state.current_domain = Domain(enum_value)
+    except Exception:
+        return
 
 def call_model_with_retry_v7(
     prompt: str,
@@ -353,7 +451,7 @@ def call_model_with_retry_v7(
 ):
     """
     V7 wrapper: enforces domain progression via state + validates with V7 invariants.
-    No changes to your original call_model_with_retry.
+    Uses llm_call + retry loop.
     """
     v7_enforce_domain_progression(state, expected_domain)
 
@@ -388,7 +486,7 @@ def call_model_with_retry_v7(
     if errors:
         raise ValueError("Model failed V7 validation after retries: " + "; ".join(errors))
 
-    # Update state domain only after successful V7-validated response
-    # (state.current_domain uses your enum values; we map expected_domain back if needed)
-    # We do NOT mutate your enum; we only advance when caller advances expected_domain.
+    # V7 ENFORCEMENT: advance state only after success
+    v7_set_state_domain_after_success(state, expected_domain)
+
     return parsed
