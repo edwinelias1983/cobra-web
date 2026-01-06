@@ -659,6 +659,36 @@ def v7_consolidation_response(state: CobraState) -> dict:
         },
         "media_suggestions": []
     }
+# ============================================================
+# V7 REQUIRED: PHASE 1 TRANSFER / VERIFICATION GATE
+# ============================================================
+
+def v7_phase1_transfer_required(state: CobraState) -> bool:
+    """
+    Phase 1 is incomplete until transfer has been verified.
+    """
+    return not getattr(state, "phase1_transfer_complete", False)
+
+def v7_phase1_transfer_response(state: CobraState) -> dict:
+    return {
+        "domain": v7_state_domain_label(state),
+        "phase": "PHASE_1",
+        "intent": "TRANSFER_CHECK",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "UNKNOWN",
+        "text": (
+            "Before we continue, show transfer:\n\n"
+            "1) Explain this using YOUR symbols.\n"
+            "2) Explain the same idea using formal or academic language.\n\n"
+            "We will compare alignment before moving on."
+        ),
+        "micro_check": {
+            "prompt": "Provide both explanations.",
+            "expected_response_type": "conceptual"
+        },
+        "media_suggestions": []
+    }
 
 # ============================================================
 # V7 REQUIRED: INTERACTION MODE BEHAVIOR ENFORCEMENT
