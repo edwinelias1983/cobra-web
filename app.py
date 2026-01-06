@@ -436,13 +436,24 @@ def validate_cobra_response_v7(
     parsed, errors = validate_cobra_response(
         raw_text,
         expected_domain,
-        normalize_phase_token(expected_phase),  # <-- ADDITION #2 (only change)
+        normalize_phase_token(expected_phase),
         symbol_universe=symbol_universe
     )
 
     # If schema/base validation already failed, return as-is.
     if errors or parsed is None:
         return None, errors
+
+    if "phase" in parsed:
+        parsed["phase"] = normalize_phase_token(parsed["phase"])
+
+    if parsed.get("phase") != normalize_phase_token(expected_phase):
+        return None, [
+            f"Wrong phase: got {parsed.get('phase')} expected {normalize_phase_token(expected_phase)}"
+        ]
+
+    return parsed, []
+
 
     try:
         v7_enforce_introduced_symbols(parsed)
