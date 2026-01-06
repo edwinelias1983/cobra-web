@@ -534,7 +534,13 @@ def call_model_with_retry_v7(
         response = v7_phase2_prompt(state)
         if response:
             return response
-   
+       # V7 PHASE 2: STRESS-TEST MODE ACTIVATION
+    if (
+        expected_phase == "PHASE_2"
+        and v7_phase2_stress_test_required(state)
+    ):
+        return v7_phase2_stress_test_prompt(state)
+
     return parsed
 
 # ============================================================
