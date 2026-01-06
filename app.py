@@ -449,7 +449,7 @@ def validate_cobra_response_v7(
     parsed, errors = validate_cobra_response(
         raw_text,
         expected_domain,
-        normalize_phase_token(expected_phase),
+        normalize_phase_for_schema(expected_phase),
         symbol_universe=symbol_universe
     )
 
