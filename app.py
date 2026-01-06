@@ -387,6 +387,16 @@ def v7_enforce_microcheck_type(parsed: dict, expected_domain: str):
 
     if want_type and got_type != want_type:
         raise RuntimeError(
+            f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' "
+            f"for domain {expected_domain} (got '{got_type}')"
+        )
+
+    mc = parsed.get("micro_check", {})
+    got_type = mc.get("expected_response_type")
+    want_type = V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain)
+
+    if want_type and got_type != want_type:
+        raise RuntimeError(
             f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' for domain {expected_domain} (got '{got_type}')"
         )
 
