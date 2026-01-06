@@ -46,16 +46,16 @@ def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
     schema_str = json.dumps(COBRA_SCHEMA, ensure_ascii=False)
 
     system = (
-    "You are operating under the COBRA protocol. "
-    "You MUST output ONLY a single valid JSON object that validates against the provided schema. "
-    f"Required: domain must equal {expected_domain}; phase must equal {expected_phase}. "
-    "DO NOT explain the system, domain, phase, or protocol. "
-    "DO NOT describe what you are doing. "
-    "DO NOT ask meta-questions about understanding the explanation. "
-    "Respond ONLY to the user’s content using their language and lived examples. "
-    "Do not include markdown, explanations, or code fences.\n\n"
-    "COBRA Response Schema V1 (authoritative):\n"
-    + schema_str
+        "You are operating under the COBRA protocol. "
+        "You MUST output ONLY a single valid JSON object that validates against the provided schema. "
+        f"Required: domain must equal {expected_domain}; phase must equal {expected_phase}. "
+        "DO NOT explain the system, domain, phase, or protocol. "
+        "DO NOT describe what you are doing. "
+        "DO NOT ask meta-questions about understanding the explanation. "
+        "Respond ONLY to the user’s content using their language and lived examples. "
+        "Do not include markdown, explanations, or code fences.\n\n"
+        "COBRA Response Schema V1 (authoritative):\n"
+        + schema_str
     )
 
     response = client.chat.completions.create(
@@ -69,11 +69,19 @@ def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
 
     raw = response.choices[0].message.content
 
+    # --- V7 HARDENING: normalize PHASE tokens BEFORE validation ---
+    try:
+        temp = json.loads(raw)
+        if isinstance(temp, dict) and "phase" in temp:
+            temp["phase"] = normalize_phase_token(temp["phase"])
+            raw = json.dumps(temp, ensure_ascii=False)
+    except Exception:
+        pass
+
     # ---------- JSON GUARD (NEW) ----------
     try:
         json.loads(raw)
     except Exception:
-        # Force retry path instead of crashing
         return json.dumps({
             "domain": expected_domain,
             "phase": expected_phase,
@@ -89,7 +97,6 @@ def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
         })
 
     return raw
-
 
 # =========================
 # VALIDATION
