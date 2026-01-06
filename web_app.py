@@ -1,10 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+
 from app import (
-    call_model_with_retry,          # V6 (kept, not removed)
-    call_model_with_retry_v7,       # V7
-    CobraState,                     # V7
-    v7_state_domain_label           # V7: canonical domain label from server state
+    call_model_with_retry_v7,   # V7 orchestrator
+    CobraState,
+    v7_state_domain_label,
+    InteractionMode,
+    v7_requires_domain0b,
+    v7_domain0b_response,
+    v7_record_domain0b_answer,
 )
 
 import json
@@ -47,9 +51,7 @@ def log_interaction(payload, response_obj):
     payload_json = json.dumps(payload, ensure_ascii=False)
     response_json = json.dumps(response_obj, ensure_ascii=False)
 
-    payload_hash = hashlib.sha256(
-        payload_json.encode("utf-8")
-    ).hexdigest()
+    payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
@@ -62,7 +64,7 @@ def log_interaction(payload, response_obj):
         conn.commit()
 
 # ============================================================
-# V7 SESSION STATE HELPERS
+# SESSION STATE HELPERS
 # ============================================================
 
 def load_session_state(session_id: str) -> CobraState:
@@ -76,15 +78,12 @@ def load_session_state(session_id: str) -> CobraState:
     if not row:
         return CobraState()
 
-    try:
-        data = json.loads(row[0])
-        state = CobraState()
-        for k, v in data.items():
-            if hasattr(state, k):
-                setattr(state, k, v)
-        return state
-    except Exception:
-        return CobraState()
+    data = json.loads(row[0])
+    state = CobraState()
+    for k, v in data.items():
+        if hasattr(state, k):
+            setattr(state, k, v)
+    return state
 
 def save_session_state(session_id: str, state: CobraState):
     state_json = json.dumps(state.__dict__, ensure_ascii=False)
@@ -103,33 +102,29 @@ def save_session_state(session_id: str, state: CobraState):
         conn.commit()
 
 # ============================================================
-# V7 SERVER-AUTHORITATIVE DOMAIN/PHASE
+# SERVER-AUTHORITATIVE DOMAIN / PHASE
 # ============================================================
 
 def server_expected_domain(state: CobraState) -> str:
     return v7_state_domain_label(state)
 
 def server_expected_phase(state: CobraState) -> str:
-    if getattr(state, "phase1_transfer_complete", False):
-        return "PHASE_2"
-    return "PHASE_1"
+    return "PHASE_2" if getattr(state, "phase1_transfer_complete", False) else "PHASE_1"
 
 def server_symbol_universe(payload: dict, state: CobraState):
-    su = payload.get("symbol_universe")
-    if su is not None:
-        return su
+    if "symbol_universe" in payload:
+        return payload["symbol_universe"]
     if isinstance(state.symbolic_universe, dict):
         return (
             state.symbolic_universe.get("symbol_universe")
             or state.symbolic_universe.get("symbols")
-            or None
         )
     if isinstance(state.symbolic_universe, list):
         return state.symbolic_universe
     return None
 
 # ============================================================
-# Routes
+# ROUTES
 # ============================================================
 
 @app.get("/", response_class=HTMLResponse)
@@ -140,75 +135,70 @@ def root():
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
     try:
-        # ----------------------------------------------------
-        # Load per-session state
-        # ----------------------------------------------------
+        # ---------------------------
+        # Load session
+        # ---------------------------
         session_id = payload.get("session_id")
         if not session_id:
             raise HTTPException(status_code=400, detail="Missing session_id")
 
         state = load_session_state(session_id)
 
-        # ----------------------------------------------------
-        # V7: DOMAIN 0 INITIALIZATION (API BOUNDARY)
-        # ----------------------------------------------------
+        # =====================================================
+        # V7 DOMAIN 0 — SERVER-OWNED, ONE-TIME INITIALIZATION
+        # =====================================================
         if not state.domain0_complete:
-            if (
-                "interaction_mode" in payload
-                and "want_to_understand" in payload
-                and "likes" in payload
-            ):
-                state.interaction_mode = payload["interaction_mode"]
-                state.symbolic_universe["domain0"] = {
-                    "want_to_understand": payload["want_to_understand"],
-                    "likes": payload["likes"],
+            if not all(k in payload for k in ("interaction_mode", "want_to_understand", "likes")):
+                # Hard stop: Domain 0 must complete before anything else
+                response = {
+                    "error": "domain0_required",
+                    "message": "Domain 0 must be completed before continuing."
                 }
-                state.domain0_complete = True
+                log_interaction(payload, response)
+                return response
 
-        # ----------------------------------------------------
-        # Build prompt (micro-check continuation supported)
-        # ----------------------------------------------------
+            state.interaction_mode = InteractionMode(payload["interaction_mode"])
+            state.symbolic_universe["domain0"] = {
+                "want_to_understand": payload["want_to_understand"],
+                "likes": payload["likes"],
+            }
+            state.domain0_complete = True
+            save_session_state(session_id, state)
+
+        # =====================================================
+        # V7 DOMAIN 0B — AUDITORY SYMBOL MAP (ENFORCED)
+        # =====================================================
+        if v7_requires_domain0b(state):
+            if "auditory_response" in payload:
+                v7_record_domain0b_answer(state, payload["auditory_response"])
+                save_session_state(session_id, state)
+            response = v7_domain0b_response(state)
+            log_interaction(payload, response)
+            return response
+
+        # ---------------------------
+        # Build prompt
+        # ---------------------------
         prompt = payload.get("prompt", "")
         if payload.get("micro_response"):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
 
-        # ----------------------------------------------------
-        # Server-authoritative domain + phase
-        # ----------------------------------------------------
+        # ---------------------------
+        # Server-authoritative control
+        # ---------------------------
         expected_domain = server_expected_domain(state)
         expected_phase = server_expected_phase(state)
 
-        # ----------------------------------------------------
-        # Call V7 orchestrator
-        # ----------------------------------------------------
+        # ---------------------------
+        # Call V7 engine
+        # ---------------------------
         response = call_model_with_retry_v7(
             prompt=prompt,
+            state=state,
             expected_domain=expected_domain,
             expected_phase=expected_phase,
-            state=state,
             symbol_universe=server_symbol_universe(payload, state),
         )
-
-        # ----------------------------------------------------
-        # Advance gate hardening
-        # ----------------------------------------------------
-        if isinstance(response, dict):
-            intent = response.get("intent")
-            locking_intents = {
-                "MICRO_CHECK",
-                "REPAIR",
-                "TRANSFER_CHECK",
-                "STRESS_TEST",
-                "PHASE2_CHOICE",
-            }
-
-            if intent in locking_intents:
-                response["advance_allowed"] = False
-            else:
-                response.setdefault(
-                    "advance_allowed",
-                    bool(state.last_microcheck_passed and not state.consolidation_active)
-                )
 
         save_session_state(session_id, state)
 
