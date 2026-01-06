@@ -69,11 +69,11 @@ def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
 
     raw = response.choices[0].message.content
 
-    # --- V7 HARDENING: normalize PHASE tokens BEFORE validation ---
+    # --- V7 HARDENING: normalize PHASE tokens for SCHEMA ---
     try:
         temp = json.loads(raw)
         if isinstance(temp, dict) and "phase" in temp:
-            temp["phase"] = normalize_phase_token(temp["phase"])
+            temp["phase"] = normalize_phase_for_schema(temp["phase"])
             raw = json.dumps(temp, ensure_ascii=False)
     except Exception:
         pass
