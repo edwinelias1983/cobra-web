@@ -9,6 +9,7 @@ from app import (
     v7_requires_domain0b,
     v7_domain0b_response,
     v7_record_domain0b_answer,
+    v7_domain0_response,        # MISSING IMPORT (FIXED)
 )
 
 import json
@@ -145,15 +146,22 @@ def run_cobra(payload: dict):
         state = load_session_state(session_id)
 
         # =====================================================
+        # V7 HARD GUARD — Domain 0 / 0B are write-once
+        # =====================================================
+        if state.domain0_complete:
+            payload.pop("interaction_mode", None)
+            payload.pop("want_to_understand", None)
+            payload.pop("likes", None)
+
+        if not v7_requires_domain0b(state):
+            payload.pop("auditory_response", None)
+
+        # =====================================================
         # V7 DOMAIN 0 — SERVER-OWNED, ONE-TIME INITIALIZATION
         # =====================================================
         if not state.domain0_complete:
             if not all(k in payload for k in ("interaction_mode", "want_to_understand", "likes")):
-                # Hard stop: Domain 0 must complete before anything else
-                response = {
-                    "error": "domain0_required",
-                    "message": "Domain 0 must be completed before continuing."
-                }
+                response = v7_domain0_response()
                 log_interaction(payload, response)
                 return response
 
@@ -172,9 +180,12 @@ def run_cobra(payload: dict):
             if "auditory_response" in payload:
                 v7_record_domain0b_answer(state, payload["auditory_response"])
                 save_session_state(session_id, state)
+
             response = v7_domain0b_response(state)
-            log_interaction(payload, response)
-            return response
+            if response:
+                log_interaction(payload, response)
+                return response
+        # else: Domain 0B complete → fall through
 
         # ---------------------------
         # Build prompt
@@ -199,6 +210,19 @@ def run_cobra(payload: dict):
             expected_phase=expected_phase,
             symbol_universe=server_symbol_universe(payload, state),
         )
+
+        # =====================================================
+        # V7 HARD LOCK — server enforces non-advancement
+        # =====================================================
+        if isinstance(response, dict):
+            if response.get("intent") in {
+                "MICRO_CHECK",
+                "REPAIR",
+                "TRANSFER_CHECK",
+                "STRESS_TEST",
+                "PHASE2_CHOICE",
+            }:
+                response["advance_allowed"] = False
 
         save_session_state(session_id, state)
 
