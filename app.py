@@ -551,4 +551,54 @@ def v7_domain0_response() -> dict:
         },
         "media_suggestions": []
     }
+# ============================================================
+# V7 REQUIRED: DOMAIN 0B — AUDITORY SYMBOL MAP
+# ============================================================
+
+D0B_QUESTIONS = [
+    "Whose voice is really easy for you to understand?",
+    "Who explains things in a way that immediately makes sense to you?",
+    "Can you tell me something they explained that really stuck — and how they said it?",
+    (
+        "Is there a cultural or regional way of speaking that feels natural to your brain "
+        "(e.g., Mexico City Spanish, Caribbean Spanish, AAVE, Spanglish, rural English)?"
+    ),
+    (
+        "When explanations work best for you, do you prefer the big picture first, "
+        "the details first, or moving back and forth?"
+    ),
+]
+
+def v7_requires_domain0b(state: CobraState) -> bool:
+    return not state.auditory_universe
+
+def v7_domain0b_response(state: CobraState) -> dict:
+    asked = state.auditory_universe.get("_asked", 0)
+    if asked >= len(D0B_QUESTIONS):
+        return {}
+
+    question = D0B_QUESTIONS[asked]
+
+    return {
+        "domain": "D0B",
+        "phase": "PHASE_1",
+        "intent": "QUESTION",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "UNKNOWN",
+        "text": question,
+        "micro_check": {
+            "prompt": "Answer in your own words.",
+            "expected_response_type": "conceptual"
+        },
+        "media_suggestions": []
+    }
+
+def v7_record_domain0b_answer(state: CobraState, answer: str):
+    if "_asked" not in state.auditory_universe:
+        state.auditory_universe["_asked"] = 0
+        state.auditory_universe["responses"] = []
+
+    state.auditory_universe["responses"].append(answer)
+    state.auditory_universe["_asked"] += 1
 
