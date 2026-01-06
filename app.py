@@ -526,7 +526,15 @@ def call_model_with_retry_v7(
         and expected_domain == "D5"
     ):
         return v7_phase1_transfer_response(state)
-        
+         # V7 PHASE 2: TOP-DOWN INVERSION ACTIVATION
+    if (
+        expected_phase == "PHASE_2"
+        and v7_phase2_inversion_required(state)
+    ):
+        response = v7_phase2_prompt(state)
+        if response:
+            return response
+   
     return parsed
 
 # ============================================================
