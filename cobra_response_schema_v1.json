@@ -1,9 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cobra.example/schema/cobra-response-v1.json",
-  "title": "COBRA Response Schema V1",
+  "$id": "https://cobra.example/schema/cobra-response-v7.json",
+  "title": "COBRA Response Schema V7",
   "type": "object",
   "additionalProperties": false,
+
   "required": [
     "domain",
     "phase",
@@ -16,6 +17,7 @@
     "stability_assessment",
     "next_domain_recommendation"
   ],
+
   "properties": {
     "domain": {
       "type": "string",
@@ -35,6 +37,7 @@
         "EXPANSION"
       ]
     },
+
     "phase": {
       "type": "string",
       "enum": [
@@ -42,6 +45,7 @@
         "PHASE2"
       ]
     },
+
     "intent": {
       "type": "string",
       "enum": [
@@ -56,10 +60,51 @@
         "SUMMARY"
       ]
     },
+
     "text": {
       "type": "string",
       "minLength": 1
     },
+
+    "segments": {
+      "type": "array",
+      "description": "V7 rolling / append-only UI segments",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "content"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "instruction",
+              "symbolic_mapping",
+              "metaphor",
+              "reflection",
+              "micro_check",
+              "confirmation",
+              "repair_note"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "default": []
+    },
+
+    "append_only": {
+      "type": "boolean",
+      "default": true
+    },
+
+    "advance_allowed": {
+      "type": "boolean",
+      "default": false
+    },
+
     "symbols_used": {
       "type": "array",
       "items": {
@@ -68,9 +113,11 @@
       },
       "minItems": 0
     },
+
     "introduced_new_symbols": {
       "type": "boolean"
     },
+
     "new_symbols_proposed": {
       "type": "array",
       "items": {
@@ -79,6 +126,7 @@
       },
       "default": []
     },
+
     "media_suggestions": {
       "type": "array",
       "default": [],
@@ -121,6 +169,7 @@
         }
       }
     },
+
     "micro_check": {
       "type": "object",
       "additionalProperties": false,
@@ -140,14 +189,23 @@
             "selection",
             "one_sentence",
             "yes_no",
-            "list_1_3"
+            "list_1_3",
+            "symbolic",
+            "metaphoric",
+            "analogy",
+            "pattern",
+            "temporal",
+            "systemic",
+            "paradox"
           ]
         }
       }
     },
+
     "repair_required": {
       "type": "boolean"
     },
+
     "diagnostic_mapping": {
       "type": "object",
       "additionalProperties": false,
@@ -170,6 +228,7 @@
         }
       }
     },
+
     "stability_assessment": {
       "type": "string",
       "enum": [
@@ -178,6 +237,7 @@
         "UNKNOWN"
       ]
     },
+
     "next_domain_recommendation": {
       "type": "string",
       "enum": [
@@ -197,17 +257,20 @@
         "END"
       ]
     },
+
     "notes_for_orchestrator": {
       "type": "string",
       "default": ""
     },
+
     "symbol_universe": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "User-approved symbolic universe tokens (from Domain 0). Required for D1 and D2 responses."
+      "description": "User-approved symbolic universe tokens (from Domain 0). Required for D1 and D2."
     },
+
     "interaction_mode": {
       "type": "string",
       "enum": [
@@ -216,19 +279,24 @@
         "mastery"
       ]
     },
+
     "current_domain": {
       "type": "string"
     },
+
     "stamina_gate_available": {
       "type": "boolean"
     },
+
     "consolidation_active": {
       "type": "boolean"
     },
+
     "symbolic_universe": {
       "type": "object",
       "additionalProperties": true
     },
+
     "auditory_universe": {
       "type": "object",
       "additionalProperties": true
@@ -252,9 +320,7 @@
     {
       "if": {
         "properties": {
-          "domain": {
-            "enum": ["D1", "D2"]
-          }
+          "domain": { "enum": ["D1", "D2"] }
         }
       },
       "then": {
@@ -269,15 +335,24 @@
     {
       "if": {
         "properties": {
-          "intent": {
-            "const": "REPAIR"
-          }
+          "intent": { "const": "REPAIR" }
         }
       },
       "then": {
         "required": ["diagnostic_mapping"]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "intent": { "enum": ["MICRO_CHECK", "REPAIR"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "advance_allowed": { "const": false }
+        }
+      }
     }
   ]
 }
-
