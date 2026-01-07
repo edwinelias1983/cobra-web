@@ -520,7 +520,7 @@ def call_model_with_retry_v7(
     V7 wrapper: enforces domain progression via state + validates with V7 invariants.
     Uses llm_call + retry loop.
     """
-        # ---------------------------
+    # ---------------------------
     # V7 HARD STOP: DOMAIN 0
     # Domain 0 must be ASKED first, and must be RECORDED before anything else.
     # ---------------------------
@@ -546,13 +546,22 @@ def call_model_with_retry_v7(
 
         # Domain 0 is now complete; immediately ask the first Domain 0B question.
         return v7_domain0b_response(state)
-    
+
     # ---------------------------
     # V7 DOMAIN 0B — RECORD ANSWER THEN ASK NEXT
     # ---------------------------
-    if v7_requires_domain0b(state):
-        return v7_domain0b_response(state)
+    if expected_domain == "D0B" and not state.domain0b_complete:
+        # Record the user's answer
+        v7_record_domain0b_answer(state, prompt)
 
+        # Ask next question if still incomplete
+        if not state.domain0b_complete:
+            return v7_domain0b_response(state)
+
+        # If completed, advance to Domain 1
+        state.current_domain = Domain.D1
+
+    # Keep your existing progression enforcement
     v7_enforce_domain_progression(state, expected_domain)
 
     raw = llm_call(prompt, expected_domain, expected_phase)
@@ -587,6 +596,47 @@ def call_model_with_retry_v7(
         raise ValueError(
             "Model failed V7 validation after retries: " + "; ".join(errors)
         )
+
+    # V7 ENFORCEMENT: advance state only after success
+    v7_set_state_domain_after_success(state, expected_domain)
+    v7_apply_interaction_mode_constraints(state, parsed)
+
+    if (
+        parsed.get("stability_assessment") == "STABLE"
+        and maybe_offer_stamina_gate(state)
+    ):
+        return v7_stamina_gate_response(state)
+
+    if state.consolidation_active:
+        return v7_consolidation_response(state)
+
+    # PHASE 1 TRANSFER
+    if (
+        expected_phase == "PHASE_1"
+        and v7_phase1_transfer_required(state)
+        and parsed.get("stability_assessment") == "STABLE"
+        and expected_domain == "D5"
+    ):
+        state.phase1_transfer_complete = True
+        return v7_phase1_transfer_response(state)
+
+    # PHASE 2: TOP-DOWN INVERSION ACTIVATION
+    if (
+        expected_phase == "PHASE_2"
+        and v7_phase2_inversion_required(state)
+    ):
+        state.phase2_active = True
+        response = v7_phase2_prompt(state)
+        if response:
+            return response
+
+    # ---------------------------
+    # V7 PHASE 2 STRESS TEST
+    # ---------------------------
+    if v7_phase2_stress_test_required(state):
+        return v7_phase2_stress_test_prompt(state)
+
+    return parsed
 
     # V7 ENFORCEMENT: advance state only after success
     v7_set_state_domain_after_success(state, expected_domain)
