@@ -146,13 +146,13 @@ pre{
     <label>1 — What do you want to understand today?</label>
     <textarea id="q1" rows="3"></textarea>
 
-  <label>
-     2 — What do you naturally understand or like?
-     <br/>
-     <span style="font-size:13px; opacity:.8;">
-       (sports, shows, music, games, hobbies, cultural references, memes, skills—anything that already “clicks” for you)
-     </span>
-   </label>
+    <label>
+      2 — What do you naturally understand or like?
+      <br/>
+      <span style="font-size:13px; opacity:.8;">
+        (sports, shows, music, games, hobbies, cultural references, memes, skills—anything that already “clicks” for you)
+      </span>
+    </label>
 
     <small>
       COBRA uses your existing symbols — the things that already make sense to you —
@@ -214,17 +214,14 @@ function getSessionId(){
 
 /* =========================
    V7 ADD: Rolling render (segments) + micro-check label
-   NO deletions: falls back to original text behavior
    ========================= */
 function renderCobraResponse(data){
   const out = document.getElementById("output");
 
-  // Original behavior: show text
-  // V7 addition: if segments exist, render them in order (rolling screen)
   if (Array.isArray(data.segments) && data.segments.length > 0) {
     out.textContent = "";
     data.segments.forEach(seg => {
-      if (seg && typeof seg.content === "string" && seg.content.trim().length > 0) {
+      if (seg?.content?.trim()) {
         out.textContent += seg.content + "\n\n";
       }
     });
@@ -235,7 +232,6 @@ function renderCobraResponse(data){
     out.textContent = "Unexpected response format.";
   }
 
-  // Preserve original micro-check display behavior, but add type label
   if (data.micro_check?.prompt) {
     out.textContent +=
       "\n\n— Quick check (" +
@@ -246,11 +242,6 @@ function renderCobraResponse(data){
     document.getElementById("microCheckBox").style.display = "none";
   }
 
-  /* =========================
-     V7 ADD (ONLY NEW ADDITION):
-     Respect advance_allowed gate.
-     This does NOT change any other logic.
-     ========================= */
   if (data.advance_allowed === false) {
     document.getElementById("microCheckBox").style.display =
       data.micro_check ? "block" : "none";
@@ -282,10 +273,7 @@ async function begin(){
 2) ${q2}
 Voice: ${voice}
 Mode: ${mode}
-    `,
-    expected_domain: "D0",
-    expected_phase: "PHASE1",
-    symbol_universe: []
+    `
   };
 
   try {
@@ -296,15 +284,7 @@ Mode: ${mode}
     });
 
     const data = await res.json();
-
-    // Preserve original branching, but route through render helper
-    if (data.text || (Array.isArray(data.segments) && data.segments.length > 0)) {
-      renderCobraResponse(data);
-    } else if (data.error) {
-      out.textContent = "ERROR: " + (data.message || "Unknown error");
-    } else {
-      out.textContent = "Unexpected response format.";
-    }
+    renderCobraResponse(data);
 
   } catch (e) {
     out.textContent = "ERROR: " + e.message;
@@ -321,14 +301,9 @@ async function submitMicroCheck(){
   document.getElementById("microCheckBox").style.display = "none";
   document.getElementById("output").textContent = "Thinking…";
 
-  // NO omission: keep original payload fields exactly (plus micro_response)
   const payload = {
     session_id: getSessionId(),
-    prompt: "",
-    micro_response: response,
-    expected_domain: "D0",
-    expected_phase: "PHASE1",
-    symbol_universe: []
+    micro_response: response
   };
 
   try {
@@ -339,15 +314,7 @@ async function submitMicroCheck(){
     });
 
     const data = await res.json();
-
-    // Preserve original behavior and micro-check loop
-    if (data.text || (Array.isArray(data.segments) && data.segments.length > 0)) {
-      renderCobraResponse(data);
-      // preserve prior behavior: keep showing microCheckBox if prompt exists (renderCobraResponse handles this)
-    } else if (data.error) {
-      document.getElementById("output").textContent =
-        "ERROR: " + (data.message || "Unknown error");
-    }
+    renderCobraResponse(data);
 
   } catch (e) {
     document.getElementById("output").textContent =
