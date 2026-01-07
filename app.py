@@ -531,8 +531,6 @@ def call_model_with_retry_v7(
     # V7 DOMAIN 0B — RECORD ANSWER THEN ASK NEXT
     # ---------------------------
     if v7_requires_domain0b(state):
-        if prompt:
-            v7_record_domain0b_answer(state, prompt)
         return v7_domain0b_response(state)
 
     v7_enforce_domain_progression(state, expected_domain)
@@ -602,6 +600,11 @@ def call_model_with_retry_v7(
         response = v7_phase2_prompt(state)
         if response:
             return response
+        # ---------------------------
+        # V7 PHASE 2 STRESS TEST
+        # ---------------------------
+    if v7_phase2_stress_test_required(state):
+        return v7_phase2_stress_test_prompt(state)
 
     return parsed
 # ============================================================
