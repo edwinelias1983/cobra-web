@@ -217,6 +217,7 @@ class Domain(str, Enum):
 class CobraState:
     interaction_mode: InteractionMode | None = None
     domain0_complete: bool = False
+    domain0b_complete: bool = False 
     current_domain: Domain = Domain.D0
     stamina_used: bool = False
     consolidation_active: bool = False
@@ -226,6 +227,9 @@ class CobraState:
 
     phase2_depth_selected: bool = False
     phase2_pressure_test: bool = False
+    phase1_transfer_complete: bool = False
+    phase2_active: bool = False
+
 
 def maybe_offer_stamina_gate(state: CobraState) -> bool:
     if (
@@ -522,6 +526,14 @@ def call_model_with_retry_v7(
     # ---------------------------
     if not state.domain0_complete:
         return v7_domain0_response()
+    
+    # ---------------------------
+    # V7 DOMAIN 0B — RECORD ANSWER THEN ASK NEXT
+    # ---------------------------
+    if v7_requires_domain0b(state):
+        if prompt:
+            v7_record_domain0b_answer(state, prompt)
+        return v7_domain0b_response(state)
 
     v7_enforce_domain_progression(state, expected_domain)
 
@@ -650,9 +662,8 @@ D0B_QUESTIONS = [
 ]
 
 def v7_requires_domain0b(state: CobraState) -> bool:
-    # V7: Domain 0B completion is explicit, not inferred
+    # V7: Domain 0B completion is explicit
     return not state.domain0b_complete
-
 
 def v7_domain0b_response(state: CobraState) -> dict:
     # If already complete, no more questions
@@ -660,6 +671,10 @@ def v7_domain0b_response(state: CobraState) -> dict:
         return {}
 
     asked = state.auditory_universe.get("_asked", 0)
+
+    if asked >= len(D0B_QUESTIONS):
+        state.domain0b_complete = True
+        return {}
 
     # Safety: if all questions asked, mark complete
     if asked >= len(D0B_QUESTIONS):
