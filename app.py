@@ -520,12 +520,32 @@ def call_model_with_retry_v7(
     V7 wrapper: enforces domain progression via state + validates with V7 invariants.
     Uses llm_call + retry loop.
     """
-    # ---------------------------
+        # ---------------------------
     # V7 HARD STOP: DOMAIN 0
-    # Only block if Domain 0 answers have NOT been recorded yet
+    # Domain 0 must be ASKED first, and must be RECORDED before anything else.
     # ---------------------------
     if not state.domain0_complete:
-        return v7_domain0_response()
+        # If we are not currently in D0, force the D0 questions.
+        if expected_domain != "D0":
+            return v7_domain0_response()
+
+        # We ARE in D0, so this prompt should contain the user's answers.
+        ok, msg = v7_record_domain0_answers(state, prompt)
+        if not ok:
+            # Keep user in D0 until valid.
+            d0 = v7_domain0_response()
+            d0["intent"] = "REPAIR"
+            d0["repair_required"] = True
+            d0["stability_assessment"] = "UNSTABLE"
+            d0["text"] = d0["text"] + "\n\n" + "REPAIR REQUIRED: " + msg
+            d0["micro_check"] = {
+                "prompt": "Answer both Domain 0 questions and choose learn/adventure/mastery.",
+                "expected_response_type": "conceptual"
+            }
+            return d0
+
+        # Domain 0 is now complete; immediately ask the first Domain 0B question.
+        return v7_domain0b_response(state)
     
     # ---------------------------
     # V7 DOMAIN 0B — RECORD ANSWER THEN ASK NEXT
@@ -646,6 +666,52 @@ def v7_domain0_response() -> dict:
         },
         "media_suggestions": []
     }
+# ============================================================
+# V7 REQUIRED: DOMAIN 0 — RECORD + HARD GATE (NEW)
+# ============================================================
+
+def v7_extract_interaction_mode(text: str) -> str | None:
+    t = (text or "").strip().lower()
+    # accept loose matches: "learn", "adventure", "mastery"
+    for m in ("learn", "adventure", "mastery"):
+        if m in t:
+            return m
+    return None
+
+def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, str]:
+    """
+    Records Domain 0 answers into state.symbolic_universe and sets interaction_mode.
+    Returns: (success, message_if_failed)
+    V7 requirement: user must provide:
+      1) what they want to understand
+      2) what they naturally understand/like (symbol universe seed)
+      + interaction mode selection
+    """
+    if not user_text or not user_text.strip():
+        return (False, "Domain 0 requires answers. Please answer the questions exactly as asked.")
+
+    mode = v7_extract_interaction_mode(user_text)
+    if mode is None:
+        return (False, "Domain 0 requires you to choose an interaction mode: learn, adventure, or mastery.")
+
+    # Store the raw Domain 0 text (auditable)
+    state.symbolic_universe.setdefault("domain0_raw", [])
+    state.symbolic_universe["domain0_raw"].append(user_text.strip())
+
+    # Minimal, non-fancy storage (we keep it strict + auditable)
+    state.symbolic_universe["target_understanding"] = user_text.strip()
+
+    # Set mode
+    state.interaction_mode = InteractionMode(mode)
+
+    # Mark complete
+    state.domain0_complete = True
+
+    # Move state to D0B next (V7 order)
+    state.current_domain = Domain.D0B
+
+    return (True, "")
+
 # ============================================================
 # V7 REQUIRED: DOMAIN 0B — AUDITORY SYMBOL MAP
 # ============================================================
