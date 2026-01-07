@@ -275,6 +275,14 @@ V7_DOMAIN_CANONICAL_MAP = {
     "domain_4": "D4",
     "domain_5": "D5",
 }
+current = v7_state_domain_label(state)
+expected_next = v7_expected_next_domain(current)
+
+if expected_domain not in (current, expected_next):
+    raise RuntimeError(
+        f"[V7 VIOLATION] Illegal domain request: got {expected_domain}, "
+        f"expected {current} or {expected_next}"
+    )
 
 # V7 ADD: reverse map (V7 label -> enum value string)
 V7_DOMAIN_REVERSE_MAP = {v: k for k, v in V7_DOMAIN_CANONICAL_MAP.items()}
@@ -382,6 +390,16 @@ def v7_enforce_symbol_binding(parsed: dict, expected_domain: str, symbol_univers
     invalid = [s for s in used if s not in su]
     if invalid:
         raise RuntimeError(f"[V7 VIOLATION] symbols_used contains items not in symbol_universe: {invalid}")
+
+def v7_get_symbol_universe(state: CobraState) -> list:
+    """
+    Canonical V7 symbol universe.
+    Symbols must originate from Domain 0 / 0B only.
+    """
+    su = state.symbolic_universe.get("symbols", [])
+    if not isinstance(su, list):
+        return []
+    return su
 
 def v7_enforce_introduced_symbols(parsed: dict):
     """
@@ -560,6 +578,15 @@ def call_model_with_retry_v7(
 
         # If completed, advance to Domain 1
         state.current_domain = Domain.D1
+    
+    current = v7_state_domain_label(state)
+    expected_next = v7_expected_next_domain(current)
+
+    if expected_domain not in (current, expected_next):
+        raise RuntimeError(
+            f"[V7 VIOLATION] Illegal domain request: got {expected_domain}, " 
+            f"expected {current} or {expected_next}"
+        )
 
     # Keep your existing progression enforcement
     v7_enforce_domain_progression(state, expected_domain)
@@ -570,7 +597,7 @@ def call_model_with_retry_v7(
         expected_domain,
         expected_phase,
         state=state,
-        symbol_universe=symbol_universe
+        symbol_universe=v7_get_symbol_universe(state)
     )
 
     attempts = 0
@@ -596,6 +623,13 @@ def call_model_with_retry_v7(
         raise ValueError(
             "Model failed V7 validation after retries: " + "; ".join(errors)
         )
+     # ---------------------------
+     # V7 HARD MEDIA GATE
+     # ---------------------------
+   v7_enforce_media_domain(parsed)
+
+   if expected_domain not in ("D1", "D2"):
+       parsed["media_suggestions"] = []
 
     # V7 ENFORCEMENT: advance state only after success
     v7_set_state_domain_after_success(state, expected_domain)
