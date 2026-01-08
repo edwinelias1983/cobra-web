@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from enum import Enum
+from app import Domain
+
 
 from app import (
     call_model_with_retry_v7,   # V7 orchestrator
