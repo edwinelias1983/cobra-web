@@ -609,18 +609,6 @@ def call_model_with_retry_v7(
 
     return parsed
 
-     # ---------------------------
-     # V7 HARD MEDIA GATE
-     # ---------------------------
-   v7_enforce_media_domain(parsed)
-
-   if expected_domain not in ("D1", "D2"):
-       parsed["media_suggestions"] = []
-
-    # V7 ENFORCEMENT: advance state only after success
-    v7_set_state_domain_after_success(state, expected_domain)
-    v7_apply_interaction_mode_constraints(state, parsed)
-
     if (
         parsed.get("stability_assessment") == "STABLE"
         and maybe_offer_stamina_gate(state)
