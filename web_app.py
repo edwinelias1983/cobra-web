@@ -19,7 +19,7 @@ import sqlite3
 from pathlib import Path
 
 app = FastAPI()
-print("WEB_APP_REACHED_FASTAPI")
+
 # ============================================================
 # PERSISTENT STORAGE (SQLite)
 # ============================================================
