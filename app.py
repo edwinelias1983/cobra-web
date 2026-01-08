@@ -263,6 +263,15 @@ def maybe_add_presence_marker(state: CobraState, repair_event: bool) -> str | No
 # V7 ADD: canonical domain sequence (protocol order)
 V7_DOMAIN_SEQUENCE = ["D0", "D0B", "D1", "D2", "D2B", "D3", "D3B", "D4", "D5"]
 
+def v7_expected_next_domain(current: str) -> str | None:
+    if current not in V7_DOMAIN_SEQUENCE:
+        return None
+    idx = V7_DOMAIN_SEQUENCE.index(current)
+    if idx + 1 >= len(V7_DOMAIN_SEQUENCE):
+        return current
+    return V7_DOMAIN_SEQUENCE[idx + 1]
+
+
 # V7 ADD: map your existing enum values to V7 canonical labels
 V7_DOMAIN_CANONICAL_MAP = {
     "domain_0": "D0",
@@ -275,14 +284,6 @@ V7_DOMAIN_CANONICAL_MAP = {
     "domain_4": "D4",
     "domain_5": "D5",
 }
-current = v7_state_domain_label(state)
-expected_next = v7_expected_next_domain(current)
-
-if expected_domain not in (current, expected_next):
-    raise RuntimeError(
-        f"[V7 VIOLATION] Illegal domain request: got {expected_domain}, "
-        f"expected {current} or {expected_next}"
-    )
 
 # V7 ADD: reverse map (V7 label -> enum value string)
 V7_DOMAIN_REVERSE_MAP = {v: k for k, v in V7_DOMAIN_CANONICAL_MAP.items()}
@@ -650,41 +651,7 @@ def call_model_with_retry_v7(
     v7_set_state_domain_after_success(state, expected_domain)
     v7_apply_interaction_mode_constraints(state, parsed)
 
-    if (
-        parsed.get("stability_assessment") == "STABLE"
-        and maybe_offer_stamina_gate(state)
-    ):
-        return v7_stamina_gate_response(state)
-
-    if state.consolidation_active:
-        return v7_consolidation_response(state)
-
-    # PHASE 1 TRANSFER
-    if (
-        expected_phase == "PHASE_1"
-        and v7_phase1_transfer_required(state)
-        and parsed.get("stability_assessment") == "STABLE"
-        and expected_domain == "D5"
-    ):
-        state.phase1_transfer_complete = True
-        return v7_phase1_transfer_response(state)
-
-    # PHASE 2: TOP-DOWN INVERSION ACTIVATION
-    if (
-        expected_phase == "PHASE_2"
-        and v7_phase2_inversion_required(state)
-    ):
-        state.phase2_active = True
-        response = v7_phase2_prompt(state)
-        if response:
-            return response
-        # ---------------------------
-        # V7 PHASE 2 STRESS TEST
-        # ---------------------------
-    if v7_phase2_stress_test_required(state):
-        return v7_phase2_stress_test_prompt(state)
-
-    return parsed
+  
 # ============================================================
 # V7 REQUIRED: DOMAIN 0 ENFORCEMENT (MANDATORY FIRST STEP)
 # ============================================================
