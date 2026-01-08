@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from enum import Enum
 
 from app import (
     call_model_with_retry_v7,   # V7 orchestrator
@@ -84,10 +85,27 @@ def load_session_state(session_id: str) -> CobraState:
     for k, v in data.items():
         if hasattr(state, k):
             setattr(state, k, v)
-    return state
+     
+    # Restore Enums
+    
+    if isinstance(state.interaction_mode, str):
+        state.interaction_mode = InteractionMode(state.interaction_mode)
+    if isinstance(state.current_domain, str):
+        state.current_domain = Domain(state.current_domain)
+    r
+    eturn state
 
 def save_session_state(session_id: str, state: CobraState):
-    state_json = json.dumps(state.__dict__, ensure_ascii=False)
+    data = dict(state.__dict__)
+
+    # Convert Enums to JSON-safe values
+    if isinstance(data.get("interaction_mode"), Enum):
+        data["interaction_mode"] = data["interaction_mode"].value
+    if isinstance(data.get("current_domain"), Enum):
+        data["current_domain"] = data["current_domain"].value
+
+    state_json = json.dumps(data, ensure_ascii=False)
+
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
