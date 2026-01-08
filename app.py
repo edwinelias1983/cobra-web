@@ -513,19 +513,6 @@ def validate_cobra_response_v7(
 
     return parsed, []
 
-def v7_set_state_domain_after_success(state: CobraState, expected_domain: str):
-    """
-    Advance state.current_domain to match expected_domain (V7 label).
-    This is the enforcement hook that actually makes progression real.
-    """
-    enum_value = V7_DOMAIN_REVERSE_MAP.get(expected_domain)
-    if not enum_value:
-        return
-    try:
-        state.current_domain = Domain(enum_value)
-    except Exception:
-        return
-
 def call_model_with_retry_v7(
     prompt,
     state,
@@ -538,57 +525,47 @@ def call_model_with_retry_v7(
     V7 wrapper: enforces domain progression via state + validates with V7 invariants.
     Uses llm_call + retry loop.
     """
+
     # ---------------------------
     # V7 HARD STOP: DOMAIN 0
-    # Domain 0 must be ASKED first, and must be RECORDED before anything else.
     # ---------------------------
     if not state.domain0_complete:
-        # If we are not currently in D0, force the D0 questions.
         if expected_domain != "D0":
             return v7_domain0_response()
 
-        # We ARE in D0, so this prompt should contain the user's answers.
         ok, msg = v7_record_domain0_answers(state, prompt)
         if not ok:
-            # Keep user in D0 until valid.
             d0 = v7_domain0_response()
             d0["intent"] = "REPAIR"
             d0["repair_required"] = True
             d0["stability_assessment"] = "UNSTABLE"
-            d0["text"] = d0["text"] + "\n\n" + "REPAIR REQUIRED: " + msg
+            d0["text"] = d0["text"] + "\n\nREPAIR REQUIRED: " + msg
             d0["micro_check"] = {
                 "prompt": "Answer both Domain 0 questions and choose learn/adventure/mastery.",
                 "expected_response_type": "conceptual"
             }
             return d0
 
-        # Domain 0 is now complete; immediately ask the first Domain 0B question.
         return v7_domain0b_response(state)
 
     # ---------------------------
-    # V7 DOMAIN 0B — RECORD ANSWER THEN ASK NEXT
+    # V7 DOMAIN 0B
     # ---------------------------
     if expected_domain == "D0B" and not state.domain0b_complete:
-        # Record the user's answer
         v7_record_domain0b_answer(state, prompt)
-
-        # Ask next question if still incomplete
         if not state.domain0b_complete:
             return v7_domain0b_response(state)
-
-        # If completed, advance to Domain 1
         state.current_domain = Domain.D1
-    
+
     current = v7_state_domain_label(state)
     expected_next = v7_expected_next_domain(current)
 
     if expected_domain not in (current, expected_next):
         raise RuntimeError(
-            f"[V7 VIOLATION] Illegal domain request: got {expected_domain}, " 
+            f"[V7 VIOLATION] Illegal domain request: got {expected_domain}, "
             f"expected {current} or {expected_next}"
         )
 
-    # Keep your existing progression enforcement
     v7_enforce_domain_progression(state, expected_domain)
 
     raw = llm_call(prompt, expected_domain, expected_phase)
@@ -597,7 +574,7 @@ def call_model_with_retry_v7(
         expected_domain,
         expected_phase,
         state=state,
-        symbol_universe=v7_get_symbol_universe(state)
+        symbol_universe=symbol_universe
     )
 
     attempts = 0
@@ -616,13 +593,22 @@ def call_model_with_retry_v7(
             state=state,
             symbol_universe=symbol_universe
         )
-
         attempts += 1
 
     if errors:
         raise ValueError(
             "Model failed V7 validation after retries: " + "; ".join(errors)
         )
+
+    # ---------------------------
+    # V7 POST-SUCCESS ENFORCEMENT (ONCE)
+    # ---------------------------
+    v7_enforce_media_domain(parsed)
+    v7_set_state_domain_after_success(state, expected_domain)
+    v7_apply_interaction_mode_constraints(state, parsed)
+
+    return parsed
+
      # ---------------------------
      # V7 HARD MEDIA GATE
      # ---------------------------
