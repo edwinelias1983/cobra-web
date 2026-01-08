@@ -3,16 +3,15 @@ from fastapi.responses import HTMLResponse
 from enum import Enum
 from app import Domain
 
-
 from app import (
-    call_model_with_retry_v7,   # V7 orchestrator
+    call_model_with_retry_v7,
     CobraState,
     v7_state_domain_label,
     InteractionMode,
     v7_requires_domain0b,
     v7_domain0b_response,
     v7_record_domain0b_answer,
-    v7_domain0_response,        # MISSING IMPORT (FIXED)
+    v7_domain0_response,
 )
 
 import json
@@ -54,7 +53,6 @@ init_db()
 def log_interaction(payload, response_obj):
     payload_json = json.dumps(payload, ensure_ascii=False)
     response_json = json.dumps(response_obj, ensure_ascii=False)
-
     payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -87,19 +85,17 @@ def load_session_state(session_id: str) -> CobraState:
     for k, v in data.items():
         if hasattr(state, k):
             setattr(state, k, v)
-     
-    # Restore Enums
-    
+
     if isinstance(state.interaction_mode, str):
         state.interaction_mode = InteractionMode(state.interaction_mode)
     if isinstance(state.current_domain, str):
         state.current_domain = Domain(state.current_domain)
+
     return state
 
 def save_session_state(session_id: str, state: CobraState):
     data = dict(state.__dict__)
 
-    # Convert Enums to JSON-safe values
     if isinstance(data.get("interaction_mode"), Enum):
         data["interaction_mode"] = data["interaction_mode"].value
     if isinstance(data.get("current_domain"), Enum):
@@ -154,6 +150,41 @@ def root():
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
+
+    # =====================================================
+    # PAYLOAD NORMALIZATION (FIX)
+    # =====================================================
+
+    normalized = {}
+
+    normalized["session_id"] = payload.get("session_id")
+
+    normalized["interaction_mode"] = (
+        payload.get("interaction_mode")
+        or payload.get("interactionMode")
+    )
+
+    normalized["want_to_understand"] = (
+        payload.get("want_to_understand")
+        or payload.get("want")
+    )
+
+    likes = payload.get("likes")
+    if isinstance(likes, str):
+        likes = [likes]
+    normalized["likes"] = likes
+
+    if "auditory_response" in payload:
+        normalized["auditory_response"] = payload["auditory_response"]
+
+    if "prompt" in payload:
+        normalized["prompt"] = payload["prompt"]
+
+    if "micro_response" in payload:
+        normalized["micro_response"] = payload["micro_response"]
+
+    payload = normalized
+
     try:
         # ---------------------------
         # Load session
@@ -179,7 +210,11 @@ def run_cobra(payload: dict):
         # V7 DOMAIN 0 — SERVER-OWNED, ONE-TIME INITIALIZATION
         # =====================================================
         if not state.domain0_complete:
-            if not all(k in payload for k in ("interaction_mode", "want_to_understand", "likes")):
+            if not all(k in payload and payload[k] for k in (
+                "interaction_mode",
+                "want_to_understand",
+                "likes"
+            )):
                 response = v7_domain0_response()
                 log_interaction(payload, response)
                 return response
@@ -193,7 +228,7 @@ def run_cobra(payload: dict):
             save_session_state(session_id, state)
 
         # =====================================================
-        # V7 DOMAIN 0B — AUDITORY SYMBOL MAP (ENFORCED)
+        # V7 DOMAIN 0B — AUDITORY SYMBOL MAP
         # =====================================================
         if v7_requires_domain0b(state):
             if "auditory_response" in payload:
@@ -204,7 +239,6 @@ def run_cobra(payload: dict):
             if response:
                 log_interaction(payload, response)
                 return response
-        # else: Domain 0B complete → fall through
 
         # ---------------------------
         # Build prompt
@@ -214,25 +248,16 @@ def run_cobra(payload: dict):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
 
         # ---------------------------
-        # Server-authoritative control
-        # ---------------------------
-        expected_domain = server_expected_domain(state)
-        expected_phase = server_expected_phase(state)
-
-        # ---------------------------
         # Call V7 engine
         # ---------------------------
         response = call_model_with_retry_v7(
             prompt=prompt,
             state=state,
-            expected_domain=expected_domain,
-            expected_phase=expected_phase,
+            expected_domain=server_expected_domain(state),
+            expected_phase=server_expected_phase(state),
             symbol_universe=server_symbol_universe(payload, state),
         )
 
-        # =====================================================
-        # V7 HARD LOCK — server enforces non-advancement
-        # =====================================================
         if isinstance(response, dict):
             if response.get("intent") in {
                 "MICRO_CHECK",
