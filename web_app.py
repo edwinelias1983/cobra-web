@@ -196,6 +196,7 @@ def run_cobra(payload: dict):
         if not session_id:
             session_id = str(uuid.uuid4())
             payload["session_id"] = session_id
+        print("SESSION_ID USED:", session_id)
 
         state = load_session_state(session_id)
 
