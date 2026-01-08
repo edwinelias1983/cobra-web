@@ -600,7 +600,48 @@ def call_model_with_retry_v7(
         raise ValueError(
             "Model failed V7 validation after retries: " + "; ".join(errors)
         )
+    # ---------------------------
+    # V7 POST-SUCCESS ENFORCEMENT
+    # ---------------------------
+    v7_enforce_media_domain(parsed)
+    v7_set_state_domain_after_success(state, expected_domain)
+    v7_apply_interaction_mode_constraints(state, parsed)
 
+    # ---------------------------
+    # V7 FLOW DECISIONS
+    # ---------------------------
+    if (
+        parsed.get("stability_assessment") == "STABLE"
+        and maybe_offer_stamina_gate(state) 
+    ):
+        return v7_stamina_gate_response(state)
+    if state.consolidation_active:
+        return v7_consolidation_response(state)
+
+    # PHASE 1 TRANSFER
+    if (
+        expected_phase == "PHASE_1"
+        and v7_phase1_transfer_required(state)
+        and parsed.get("stability_assessment") == "STABLE"
+        and expected_domain == "D5"
+    ):
+        state.phase1_transfer_complete = True
+        return v7_phase1_transfer_response(state)
+
+    # PHASE 2: TOP-DOWN INVERSION ACTIVATION
+    if (
+        expected_phase == "PHASE_2"
+        and v7_phase2_inversion_required(state) 
+    ):
+        state.phase2_active = True
+        response = v7_phase2_prompt(state)
+        if response:
+            return response
+
+    # PHASE 2 STRESS TEST
+    if v7_phase2_stress_test_required(state):
+        return v7_phase2_stress_test_prompt(state)
+    
     # ---------------------------
     # V7 POST-SUCCESS ENFORCEMENT (ONCE)
     # ---------------------------
