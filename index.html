@@ -178,6 +178,10 @@ pre{
 
     <pre id="output"></pre>
 
+    <div id="thinkingIndicator" style="display:none; margin-top:12px; opacity:.7;">
+      Thinking…
+    </div>
+
     <div id="microCheckBox" style="display:none; margin-top:16px;">
       <label>Quick check response</label>
       <textarea id="microResponse" rows="2"></textarea>
@@ -218,7 +222,6 @@ function getSessionId(){
 function renderCobraResponse(data){
   const out = document.getElementById("output");
 
-  // Build text to append
   let newText = "";
 
   if (Array.isArray(data.segments) && data.segments.length > 0){
@@ -247,11 +250,9 @@ function renderCobraResponse(data){
       data.micro_check ? "block" : "none";
   }
 
-  // Append instead of overwrite (ChatGPT-style)
   const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
   out.textContent += divider + newText;
 
-  // Auto-scroll
   requestAnimationFrame(()=>{
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   });
@@ -273,14 +274,13 @@ async function begin(){
 
   btn.disabled = true;
   btn.textContent = "Working…";
-  const statusDivider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
-  out.textContent += statusDivider + "Thinking…";
+  document.getElementById("thinkingIndicator").style.display = "block";
 
   const payload = {
     session_id: getSessionId(),
-    interaction_mode: mode,    // ✅ Domain 0 fix
-    want_to_understand: q1,   // ✅ Domain 0 fix
-    likes: q2,                 // ✅ Domain 0 fix
+    interaction_mode: mode,
+    want_to_understand: q1,
+    likes: q2,
     prompt: `Voice: ${voice}`
   };
 
@@ -293,8 +293,10 @@ async function begin(){
 
     const data = await res.json();
     renderCobraResponse(data);
+    document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
+    document.getElementById("thinkingIndicator").style.display = "none";
     const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
     out.textContent += divider + "ERROR: " + e.message;
     requestAnimationFrame(()=>{
@@ -311,12 +313,7 @@ async function submitMicroCheck(){
   if (!response) return;
 
   document.getElementById("microCheckBox").style.display = "none";
-  const out = document.getElementById("output");
-  const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
-  out.textContent += divider + "Thinking…";
-  requestAnimationFrame(()=>{
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-  });
+  document.getElementById("thinkingIndicator").style.display = "block";
 
   const payload = {
     session_id: getSessionId(),
@@ -332,8 +329,11 @@ async function submitMicroCheck(){
 
     const data = await res.json();
     renderCobraResponse(data);
+    document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
+    document.getElementById("thinkingIndicator").style.display = "none";
+    const out = document.getElementById("output");
     const divider2 = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
     out.textContent += divider2 + "ERROR: " + e.message;
     requestAnimationFrame(()=>{
