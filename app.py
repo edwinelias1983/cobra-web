@@ -791,7 +791,6 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
 # ============================================================
 
 D0B_QUESTIONS = [
-    "Whose voice is really easy for you to understand?",
     "Who explains things in a way that immediately makes sense to you?",
     "Can you tell me something they explained that really stuck — and how they said it?",
     (
