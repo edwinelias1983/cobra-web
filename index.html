@@ -213,39 +213,48 @@ function getSessionId(){
 }
 
 /* =========================
-   V7 ADD: Rolling render (segments) + micro-check label
+   V7 ADD: Domain 0 payload + ChatGPT-style scrolling
    ========================= */
 function renderCobraResponse(data){
   const out = document.getElementById("output");
 
-  if (Array.isArray(data.segments) && data.segments.length > 0) {
-    out.textContent = "";
+  // Build text to append
+  let newText = "";
+
+  if (Array.isArray(data.segments) && data.segments.length > 0){
     data.segments.forEach(seg => {
-      if (seg?.content?.trim()) {
-        out.textContent += seg.content + "\n\n";
+      if (seg?.content?.trim()){
+        newText += seg.content + "\n\n";
       }
     });
-    out.textContent = out.textContent.trim();
-  } else if (data.text) {
-    out.textContent = data.text;
+    newText = newText.trim();
+  } else if (data.text){
+    newText = data.text;
   } else {
-    out.textContent = "Unexpected response format.";
+    newText = "Unexpected response format.";
   }
 
-  if (data.micro_check?.prompt) {
-    out.textContent +=
-      "\n\n— Quick check (" +
-      (data.micro_check.expected_response_type || "response") +
-      ") —\n" + data.micro_check.prompt;
+  if (data.micro_check?.prompt){
+    newText += "\n\n— Quick check (" + (data.micro_check.expected_response_type || "response") +
+               ") —\n" + data.micro_check.prompt;
     document.getElementById("microCheckBox").style.display = "block";
   } else {
     document.getElementById("microCheckBox").style.display = "none";
   }
 
-  if (data.advance_allowed === false) {
+  if (data.advance_allowed === false){
     document.getElementById("microCheckBox").style.display =
       data.micro_check ? "block" : "none";
   }
+
+  // Append instead of overwrite (ChatGPT-style)
+  const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
+  out.textContent += divider + newText;
+
+  // Auto-scroll
+  requestAnimationFrame(()=>{
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  });
 }
 
 async function begin(){
@@ -257,38 +266,41 @@ async function begin(){
   const out = document.getElementById("output");
   const btn = document.querySelector("button.primary");
 
-  if (!q1 || !q2) {
+  if (!q1 || !q2){
     out.textContent = "Please answer questions 1 and 2 before continuing.";
     return;
   }
 
   btn.disabled = true;
   btn.textContent = "Working…";
-  out.textContent = "Thinking…";
+  const statusDivider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
+  out.textContent += statusDivider + "Thinking…";
 
   const payload = {
     session_id: getSessionId(),
-    prompt: `
-1) ${q1}
-2) ${q2}
-Voice: ${voice}
-Mode: ${mode}
-    `
+    interaction_mode: mode,    // ✅ Domain 0 fix
+    want_to_understand: q1,   // ✅ Domain 0 fix
+    likes: q2,                 // ✅ Domain 0 fix
+    prompt: `Voice: ${voice}`
   };
 
-  try {
+  try{
     const res = await fetch("/cobra/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
 
     const data = await res.json();
     renderCobraResponse(data);
 
-  } catch (e) {
-    out.textContent = "ERROR: " + e.message;
-  } finally {
+  } catch(e){
+    const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
+    out.textContent += divider + "ERROR: " + e.message;
+    requestAnimationFrame(()=>{
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    });
+  } finally{
     btn.disabled = false;
     btn.textContent = "Begin";
   }
@@ -299,26 +311,34 @@ async function submitMicroCheck(){
   if (!response) return;
 
   document.getElementById("microCheckBox").style.display = "none";
-  document.getElementById("output").textContent = "Thinking…";
+  const out = document.getElementById("output");
+  const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
+  out.textContent += divider + "Thinking…";
+  requestAnimationFrame(()=>{
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  });
 
   const payload = {
     session_id: getSessionId(),
     micro_response: response
   };
 
-  try {
+  try{
     const res = await fetch("/cobra/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
 
     const data = await res.json();
     renderCobraResponse(data);
 
-  } catch (e) {
-    document.getElementById("output").textContent =
-      "ERROR: " + e.message;
+  } catch(e){
+    const divider2 = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
+    out.textContent += divider2 + "ERROR: " + e.message;
+    requestAnimationFrame(()=>{
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    });
   }
 }
 </script>
