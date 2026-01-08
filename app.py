@@ -547,16 +547,6 @@ def call_model_with_retry_v7(
             }
             return d0
 
-        return v7_domain0b_response(state)
-    
-    # 🔒 NEW — Domain 0 write-once enforcement 
-    elif state.domain0_complete and expected_domain == "D0":
-        return v7_domain0b_response(state)
-
-    if state.domain0b_complete:
-        # Micro-check is permanently finished
-        state.current_domain = Domain.D1
-
     # ---------------------------
     # V7 DOMAIN 0B
     # ---------------------------
