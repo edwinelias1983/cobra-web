@@ -186,6 +186,8 @@ def run_cobra(payload: dict):
 
     payload = normalized
 
+    session_id = payload.get("session_id")  # <-- ADDED (so except can safely attach it if generated)
+
     try:
         # ---------------------------
         # Load session (SERVER-OWNED session_id if missing)
@@ -218,6 +220,8 @@ def run_cobra(payload: dict):
                 "likes"
             )):
                 response = v7_domain0_response()
+                if isinstance(response, dict):
+                    response["session_id"] = session_id  # <-- ADDED
                 log_interaction(payload, response)
                 return response
 
@@ -239,6 +243,8 @@ def run_cobra(payload: dict):
 
             response = v7_domain0b_response(state)
             if response:
+                if isinstance(response, dict):
+                    response["session_id"] = session_id  # <-- ADDED
                 log_interaction(payload, response)
                 return response
 
@@ -269,13 +275,15 @@ def run_cobra(payload: dict):
                 "PHASE2_CHOICE",
             }:
                 response["advance_allowed"] = False
+            response["session_id"] = session_id  # <-- ADDED
 
         save_session_state(session_id, state)
 
     except Exception as e:
         error_response = {
             "error": "backend_failure",
-            "message": str(e)
+            "message": str(e),
+            "session_id": session_id  # <-- ADDED
         }
         log_interaction(payload, error_response)
         return error_response
