@@ -18,6 +18,7 @@ import json
 import hashlib
 import time
 import sqlite3
+import uuid
 from pathlib import Path
 
 app = FastAPI()
@@ -152,7 +153,7 @@ def root():
 def run_cobra(payload: dict):
 
     # =====================================================
-    # PAYLOAD NORMALIZATION (FIX)
+    # PAYLOAD NORMALIZATION
     # =====================================================
 
     normalized = {}
@@ -187,11 +188,12 @@ def run_cobra(payload: dict):
 
     try:
         # ---------------------------
-        # Load session
+        # Load session (SERVER-OWNED session_id if missing)
         # ---------------------------
         session_id = payload.get("session_id")
         if not session_id:
-            raise HTTPException(status_code=400, detail="Missing session_id")
+            session_id = str(uuid.uuid4())
+            payload["session_id"] = session_id
 
         state = load_session_state(session_id)
 
