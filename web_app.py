@@ -92,8 +92,7 @@ def load_session_state(session_id: str) -> CobraState:
         state.interaction_mode = InteractionMode(state.interaction_mode)
     if isinstance(state.current_domain, str):
         state.current_domain = Domain(state.current_domain)
-    r
-    eturn state
+    return state
 
 def save_session_state(session_id: str, state: CobraState):
     data = dict(state.__dict__)
