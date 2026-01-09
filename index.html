@@ -126,6 +126,9 @@ pre{
   white-space:pre-wrap;
   font-size:13px;
   opacity:.9;
+  max-height:340px;
+  overflow-y:auto;
+  display:none;
 }
 </style>
 </head>
@@ -216,11 +219,15 @@ function getSessionId(){
   return sid;
 }
 
-/* =========================
-   V7 ADD: Domain 0 payload + ChatGPT-style scrolling
-   ========================= */
 function renderCobraResponse(data){
   const out = document.getElementById("output");
+
+  if (data.domain === "D0" || data.domain === "D0B") {
+    if (data.state?.domain0_complete && data.state?.domain0b_complete) {
+      out.style.display = "block";
+    }
+    return;
+  }
 
   let newText = "";
 
@@ -238,23 +245,17 @@ function renderCobraResponse(data){
   }
 
   if (data.intent === "MICRO_CHECK" && data.micro_check?.prompt){
-    newText += "\n\n— Quick check (" + (data.micro_check.expected_response_type || "response") +
-               ") —\n" + data.micro_check.prompt;
+    newText += "\n\n— Quick check —\n" + data.micro_check.prompt;
     document.getElementById("microCheckBox").style.display = "block";
   } else {
     document.getElementById("microCheckBox").style.display = "none";
-  }
-
-  if (data.advance_allowed === false){
-    document.getElementById("microCheckBox").style.display =
-      data.micro_check ? "block" : "none";
   }
 
   const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
   out.textContent += divider + newText;
 
   requestAnimationFrame(()=>{
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    out.scrollTop = out.scrollHeight;
   });
 }
 
@@ -269,6 +270,7 @@ async function begin(){
 
   if (!q1 || !q2){
     out.textContent = "Please answer questions 1 and 2 before continuing.";
+    out.style.display = "block";
     return;
   }
 
@@ -297,11 +299,9 @@ async function begin(){
 
   } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
+    out.style.display = "block";
     const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
     out.textContent += divider + "ERROR: " + e.message;
-    requestAnimationFrame(()=>{
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-    });
   } finally{
     btn.disabled = false;
     btn.textContent = "Begin";
@@ -334,11 +334,9 @@ async function submitMicroCheck(){
   } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
     const out = document.getElementById("output");
+    out.style.display = "block";
     const divider2 = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
     out.textContent += divider2 + "ERROR: " + e.message;
-    requestAnimationFrame(()=>{
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-    });
   }
 }
 </script>
