@@ -221,11 +221,10 @@ function getSessionId(){
 
 function renderCobraResponse(data){
   const out = document.getElementById("output");
+  out.style.display = "block";
 
   if (data.domain === "D0" || data.domain === "D0B") {
-    if (data.state?.domain0_complete && data.state?.domain0b_complete) {
-      out.style.display = "block";
-    }
+    out.textContent = data.text || "";
     return;
   }
 
