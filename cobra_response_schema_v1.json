@@ -300,6 +300,23 @@
     "auditory_universe": {
       "type": "object",
       "additionalProperties": true
+    },
+
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain0_complete",
+        "domain0b_complete"
+      ],
+      "properties": {
+        "domain0_complete": {
+          "type": "boolean"
+        },
+        "domain0b_complete": {
+          "type": "boolean"
+        }
+      }
     }
   },
 
