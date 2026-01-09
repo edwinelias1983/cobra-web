@@ -237,7 +237,7 @@ function renderCobraResponse(data){
     newText = "Unexpected response format.";
   }
 
-  if (data.micro_check?.prompt){
+  if (data.intent === "MICRO_CHECK" && data.micro_check?.prompt){
     newText += "\n\n— Quick check (" + (data.micro_check.expected_response_type || "response") +
                ") —\n" + data.micro_check.prompt;
     document.getElementById("microCheckBox").style.display = "block";
