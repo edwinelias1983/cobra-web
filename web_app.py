@@ -223,6 +223,10 @@ def run_cobra(payload: dict):
                 response = v7_domain0_response()
                 if isinstance(response, dict):
                     response["session_id"] = session_id  # <-- ADDED
+                    response["state"] = {  # <-- ADDED
+                        "domain0_complete": state.domain0_complete,
+                        "domain0b_complete": state.domain0b_complete,
+                    }
                 log_interaction(payload, response)
                 return response
 
@@ -246,6 +250,10 @@ def run_cobra(payload: dict):
             if response:
                 if isinstance(response, dict):
                     response["session_id"] = session_id  # <-- ADDED
+                    response["state"] = {  # <-- ADDED
+                        "domain0_complete": state.domain0_complete,
+                        "domain0b_complete": state.domain0b_complete,
+                    }
                 log_interaction(payload, response)
                 return response
 
@@ -277,6 +285,10 @@ def run_cobra(payload: dict):
             }:
                 response["advance_allowed"] = False
             response["session_id"] = session_id  # <-- ADDED
+            response["state"] = {  # <-- ADDED
+                "domain0_complete": state.domain0_complete,
+                "domain0b_complete": state.domain0b_complete,
+            }
 
         save_session_state(session_id, state)
 
@@ -286,6 +298,12 @@ def run_cobra(payload: dict):
             "message": str(e),
             "session_id": session_id  # <-- ADDED
         }
+        # Attach state only if we got far enough to load it
+        if "state" in locals():
+            error_response["state"] = {  # <-- ADDED
+                "domain0_complete": state.domain0_complete,
+                "domain0b_complete": state.domain0b_complete,
+            }
         log_interaction(payload, error_response)
         return error_response
 
