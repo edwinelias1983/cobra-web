@@ -724,12 +724,15 @@ def v7_domain0_response() -> dict:
             f"{D0_Q2}\n\n"
             f"{INTERACTION_MODE_PROMPT}"
         ),
+        "symbols_used": [],
         "micro_check": {
             "prompt": "Answer the questions above.",
             "expected_response_type": "conceptual"
         },
+        "next_domain_recommendation": "D0B",
         "media_suggestions": []
     }
+
 # ============================================================
 # V7 REQUIRED: DOMAIN 0 — RECORD + HARD GATE (NEW)
 # ============================================================
@@ -798,17 +801,11 @@ def v7_requires_domain0b(state: CobraState) -> bool:
     return not state.domain0b_complete
 
 def v7_domain0b_response(state: CobraState) -> dict:
-    # If already complete, no more questions
     if state.domain0b_complete:
         return {}
 
     asked = state.auditory_universe.get("_asked", 0)
 
-    if asked >= len(D0B_QUESTIONS):
-        state.domain0b_complete = True
-        return {}
-
-    # Safety: if all questions asked, mark complete
     if asked >= len(D0B_QUESTIONS):
         state.domain0b_complete = True
         return {}
@@ -823,7 +820,13 @@ def v7_domain0b_response(state: CobraState) -> dict:
         "repair_required": False,
         "stability_assessment": "UNKNOWN",
         "text": question,
-        "micro_check": []
+        "symbols_used": [],
+        "micro_check": {
+            "prompt": "Answer the question above.",
+            "expected_response_type": "conceptual"
+        },
+        "next_domain_recommendation": "D1",
+        "media_suggestions": []
     }
 
 def v7_record_domain0b_answer(state: CobraState, answer: str):
