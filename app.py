@@ -823,13 +823,8 @@ def v7_domain0b_response(state: CobraState) -> dict:
         "repair_required": False,
         "stability_assessment": "UNKNOWN",
         "text": question,
-        "micro_check": {
-            "prompt": "Answer in your own words.",
-            "expected_response_type": "conceptual"
-        },
-        "media_suggestions": []
+        "micro_check": []
     }
-
 
 def v7_record_domain0b_answer(state: CobraState, answer: str):
     if "_asked" not in state.auditory_universe:
