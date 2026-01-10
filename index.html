@@ -285,6 +285,10 @@ function getSessionId(){
 /* ===================================================== */
 /* ADDED: Chat helpers (append-only, auto-scroll)         */
 /* ===================================================== */
+
+let domain0Done = false;
+let domain0bDone = false;
+  
 function unlockChatIfReady(data){
   console.log("unlockChatIfReady called with:", data);
 
@@ -382,7 +386,12 @@ function renderCobraResponse(data){
   }
 
   if (data.domain === "D0" || data.domain === "D0B") {
-    out.textContent = data.text || "";
+    const text = data.text || "";
+    out.textContent = text;
+
+    if (text.trim()) {
+      addChatMessage("system", text);
+    }
     return;
 
   }
