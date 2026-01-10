@@ -139,7 +139,7 @@ pre{
   margin-top: 20px;
   max-height: 340px;
   overflow-y: auto;
-  display: block; 
+  display: none; 
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -291,7 +291,7 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
-  const ready = !!(data && (data.text || data.segments || data.domain));
+ const ready = !!(data && data.state && data.state.domain0_complete === true && data.state.domain0b_complete === true);
   if (ready){
     chat.style.display = "block";
     bar.style.display = "block";
@@ -364,9 +364,9 @@ async function sendChat(){
 
 function renderCobraResponse(data){
   const out = document.getElementById("output");
-  out.style.display = "block";
-  
-  unlockChatIfReady(data);
+
+  if (data && data.state && data.state.domain0_complete === true && data.state.domain0b_complete === true) {
+  }
                                       
 // =====================================================
 // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
@@ -385,9 +385,8 @@ function renderCobraResponse(data){
     out.textContent = data.text || "";
 
     /* ADDED: mirror D0/D0B messages into rolling chat as system messages */
-    if (data.text && data.text.trim()){
-      addChatMessage("system", data.text);
-    }
+  if (data.domain === "D0" || data.domain === "D0B") {
+    out.textContent = data.text || "";
     return;
   }
 
