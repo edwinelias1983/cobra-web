@@ -209,7 +209,7 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD STAMINA GATE — BOUNDED, NON-ADVANCING
         # =====================================================
-        if state.stamina_offered:
+        if getattr(state, "stamina_offered", False):
         # Stamina gate cannot repeat or affect progression
             state.stamina_offered = False
 
