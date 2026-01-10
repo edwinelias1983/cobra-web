@@ -363,10 +363,10 @@ async function sendChat(){
 }
 
 function renderCobraResponse(data){
-  const out = document.getElementById("output");
+  unlockChatIfReady(data);
 
-  if (data && data.state && data.state.domain0_complete === true && data.state.domain0b_complete === true) {
-  }
+  const out = document.getElementById("output");
+  console.log("renderCobraResponse domain/state:", data.domain, data.state);
                                       
 // =====================================================
 // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
@@ -383,11 +383,8 @@ function renderCobraResponse(data){
 
   if (data.domain === "D0" || data.domain === "D0B") {
     out.textContent = data.text || "";
-
-    /* ADDED: mirror D0/D0B messages into rolling chat as system messages */
-  if (data.domain === "D0" || data.domain === "D0B") {
-    out.textContent = data.text || "";
     return;
+
   }
 
   let newText = "";
@@ -476,6 +473,7 @@ async function begin(){
     });
 
     const data = await res.json();
+    unlockChatIfReady(data);
     renderCobraResponse(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
