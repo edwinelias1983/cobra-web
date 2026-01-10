@@ -303,7 +303,7 @@ function unlockChatIfReady(data){
     // =====================================================
   const panel = document.querySelector(".panel");
   if (panel){
-    panel.querySelectorAll("textarea, select, button.primary:not([onclick='sendChat()'])").forEach(el=>{
+    panel.querySelectorAll("textarea, select, button.primary:not([onclick='sendChat()']):not([onclick='submitMicroCheck()'])").forEach(el=>{
       if (el.id !== "chatUserInput"){
         el.style.display = "none";
       }
@@ -354,7 +354,6 @@ async function sendChat(){
 
     const data = await res.json();
     renderCobraResponse(data);
-    unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
@@ -364,7 +363,7 @@ async function sendChat(){
 }
 
 function renderCobraResponse(data){
-  const out = document.getElementById("output);
+  const out = document.getElementById("output");
   
   if (data && data.ui && data.ui.mode === "chat") {
     unlockChatIfReady(data);
