@@ -363,6 +363,14 @@ async function sendChat(){
 
 function renderCobraResponse(data){
   const out = document.getElementById("output");
+  
+// =====================================================
+// V7 RULE: After D0 + D0B, legacy <pre> is retired forever
+// =====================================================
+  if (data && data.state && data.state.domain0_complete && data.state.domain0b_complete) {
+    out.style.display = "none";
+    out.textContent = "";
+  }
 
   /* Only show legacy <pre> BEFORE chat is unlocked */
   if (!(data && data.state && data.state.domain0_complete && data.state.domain0b_complete)) {
@@ -443,6 +451,10 @@ async function begin(){
     out.style.display = "block";
     return;
   }
+  
+  // Hide static instructional note as soon as COBRA begins
+  const staticNote = document.getElementById("staticSymbolNote");
+  if (staticNote) staticNote.style.display = "none";
 
   btn.disabled = true;
   btn.textContent = "Working…";
