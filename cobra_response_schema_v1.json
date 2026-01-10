@@ -4,6 +4,7 @@
   "title": "COBRA Response Schema V7",
   "type": "object",
   "additionalProperties": false,
+  "$comment": "ADD-ONLY CHANGE: comments added for rolling-chat compatibility. Validation semantics unchanged.",
 
   "required": [
     "domain",
@@ -43,7 +44,8 @@
       "enum": [
         "PHASE1",
         "PHASE2"
-      ]
+      ],
+      "$comment": "UI NOTE: Your index.html expects PHASE_1/PHASE_2 elsewhere; this schema currently enforces PHASE1/PHASE2."
     },
 
     "intent": {
@@ -63,12 +65,14 @@
 
     "text": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "$comment": "Rolling chat: text is required canonical output even when segments are present."
     },
 
     "segments": {
       "type": "array",
       "description": "V7 rolling / append-only UI segments",
+      "$comment": "Rolling chat: when segments are present, UI should render each segment as its own appended message in-order.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -97,12 +101,14 @@
 
     "append_only": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "$comment": "Informational UI hint; server must still enforce invariants."
     },
 
     "advance_allowed": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "$comment": "Informational UI hint; server must enforce gating regardless of this flag."
     },
 
     "symbols_used": {
