@@ -203,9 +203,9 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD PHASE GATE — NO PHASE-2 WITHOUT TRANSFER
         # =====================================================
-        if getattr(state, "phase2_active", False) and not state.phase1_transfer_complete:
+        if getattr(state, "phase2_active", False) and not getattr(state, "phase1_transfer_complete", False):
             state.phase2_active = False
-       
+
         # =====================================================
         # V7 HARD STAMINA GATE — BOUNDED, NON-ADVANCING
         # =====================================================
