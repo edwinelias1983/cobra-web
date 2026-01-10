@@ -291,7 +291,7 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
-  const ready = !!(data && data.ui && data.ui.mode === "chat");
+  const ready = !!(data && (data.text || data.segments || data.domain));
   if (ready){
     chat.style.display = "block";
     bar.style.display = "block";
@@ -364,6 +364,7 @@ async function sendChat(){
 
 function renderCobraResponse(data){
   const out = document.getElementById("output");
+  out.style.display = "block";
   
   if (data && data.ui && data.ui.mode === "chat") {
     unlockChatIfReady(data);
