@@ -201,6 +201,37 @@ def run_cobra(payload: dict):
         state = load_session_state(session_id)
 
         # =====================================================
+        # V7 HARD PHASE GATE — NO PHASE-2 WITHOUT TRANSFER
+        # =====================================================
+        if state.phase2_active and not state.phase1_transfer_complete:
+            state.phase2_active = False
+       
+        # =====================================================
+        # V7 HARD STAMINA GATE — BOUNDED, NON-ADVANCING
+        # =====================================================
+        if state.stamina_offered:
+        # Stamina gate cannot repeat or affect progression
+            state.stamina_offered = False
+
+        # =====================================================
+        # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
+        # =====================================================
+    if (state.awaiting_micro_check
+        and not payload.get("micro_response")
+       ):
+           response = {
+               "intent": "MICRO_CHECK",
+               "message": "Please answer the micro-check to continue.",
+               "session_id": session_id,
+               "state": {
+                   "domain0_complete": state.domain0_complete,
+                   "domain0b_complete": state.domain0b_complete,
+               },
+           }
+           log_interaction(payload, response)
+           return response
+
+        # =====================================================
         # V7 HARD GUARD — Domain 0 / 0B are write-once
         # =====================================================
         if state.domain0_complete:
@@ -263,6 +294,7 @@ def run_cobra(payload: dict):
         prompt = payload.get("prompt", "")
         if payload.get("micro_response"):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
+            state.awaiting_micro_check = False
 
         # ---------------------------
         # Call V7 engine
