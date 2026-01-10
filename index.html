@@ -366,9 +366,7 @@ function renderCobraResponse(data){
   const out = document.getElementById("output");
   out.style.display = "block";
   
-  if (data && data.ui && data.ui.mode === "chat") {
-    unlockChatIfReady(data);
-  }
+  unlockChatIfReady(data);
                                       
 // =====================================================
 // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
