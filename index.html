@@ -139,7 +139,7 @@ pre{
   margin-top: 20px;
   max-height: 340px;
   overflow-y: auto;
-  display: none; /* unlocked after D0 + D0B */
+  display: block; 
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -186,7 +186,6 @@ pre{
 
 <div class="container">
   <h1>COBRA</h1>
-  <div class="subtitle">Before anything else, we start exactly here.</div>
 
   <div class="toggle">
     <button onclick="setTheme('obsidian')" class="active">Obsidian</button>
@@ -294,6 +293,17 @@ function unlockChatIfReady(data){
   if (ready){
     chat.style.display = "block";
     bar.style.display = "block";
+  // =====================================================
+    // ADDED: visually retire initialization inputs
+    // =====================================================
+  const panel = document.querySelector(".panel");
+  if (panel){
+    panel.querySelectorAll("textarea, select, button.primary").forEach(el=>{
+      if (el.id !== "chatUserInput"){
+        el.style.display = "none";
+      }
+      });
+    }
   }
 }
 
@@ -350,7 +360,11 @@ async function sendChat(){
 
 function renderCobraResponse(data){
   const out = document.getElementById("output");
+
+  /* Only show legacy <pre> BEFORE chat is unlocked */
+  if (!(data && data.state && data.state.domain0_complete && data.state.domain0b_complete)) {
   out.style.display = "block";
+  }
 
   /* ADDED: unlock rolling chat once backend says D0 + D0B complete */
   unlockChatIfReady(data);
@@ -401,6 +415,15 @@ function renderCobraResponse(data){
   if (newText && newText.trim()){
     addChatMessage("system", newText);
   }
+}
+// =====================================================
+// ADDED: force scrollback to latest message (authoritative)
+// =====================================================
+const chat = document.getElementById("chat");
+if (chat){
+  requestAnimationFrame(()=>{
+    chat.scrollTop = chat.scrollHeight;
+  });
 }
 
 async function begin(){
@@ -494,6 +517,20 @@ async function submitMicroCheck(){
     addChatMessage("system", "ERROR: " + e.message);
   }
 }
+// =====================================================
+// ADDED: Enter-to-send behavior (ChatGPT-style)
+// Enter = send, Shift+Enter = newline
+// =====================================================
+document.addEventListener("keydown", function(e){
+  const input = document.getElementById("chatUserInput");
+  if (!input) return;
+
+  if (document.activeElement === input && e.key === "Enter" && !e.shiftKey){
+    e.preventDefault();
+    sendChat();
+  }
+});
+
 </script>
 
 </body>
