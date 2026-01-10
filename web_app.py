@@ -203,7 +203,7 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD PHASE GATE — NO PHASE-2 WITHOUT TRANSFER
         # =====================================================
-        if state.phase2_active and not state.phase1_transfer_complete:
+        if getattr(state, "phase2_active", False) and not state.phase1_transfer_complete:
             state.phase2_active = False
        
         # =====================================================
@@ -216,9 +216,7 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
         # =====================================================
-        if (state.awaiting_micro_check
-            and not payload.get("micro_response")
-           ):
+        if getattr(state, "awaiting_micro_check", False) and not payload.get("micro_response"):
                response = {
                    "intent": "MICRO_CHECK",
                    "message": "Please answer the micro-check to continue.",
@@ -294,8 +292,8 @@ def run_cobra(payload: dict):
         prompt = payload.get("prompt", "")
         if payload.get("micro_response"):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
-            state.awaiting_micro_check = False
-
+            if hasattr(state, "awaiting_micro_check"):
+                state.awaiting_micro_check = False
         # ---------------------------
         # Call V7 engine
         # ---------------------------
