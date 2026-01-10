@@ -205,7 +205,7 @@ pre{
       </span>
     </label>
 
-    <small>
+    <small id="staticSymbolNote">
       COBRA uses your existing symbols — the things that already make sense to you —
       to explain new ideas in a way that fits your lived reality.
     </small>
@@ -254,7 +254,7 @@ pre{
       <button class="primary" onclick="submitMicroCheck()">Continue</button>
     </div>
 
-    <div class="note">
+    <div class="note" id="staticConsentNote">
       COBRA does not ask for abstract parameters.<br/>
       Domain, phase, and symbols are inferred internally from your answers —
       so learning starts from your world, not a preset system.<br/><br/>
@@ -293,6 +293,9 @@ function unlockChatIfReady(data){
   if (ready){
     chat.style.display = "block";
     bar.style.display = "block";
+  
+  const staticNote = document.getElementById("staticSymbolNote");
+  if (staticNote) staticNote.style.display = "none";
   // =====================================================
     // ADDED: visually retire initialization inputs
     // =====================================================
