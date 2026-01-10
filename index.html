@@ -286,10 +286,12 @@ function getSessionId(){
 /* ADDED: Chat helpers (append-only, auto-scroll)         */
 /* ===================================================== */
 function unlockChatIfReady(data){
+  console.log("unlockChatIfReady called with:", data);
+
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
-  const ready = !!(data && data.state && data.state.domain0_complete && data.state.domain0b_complete);
+  const ready = !!(data && data.ui && data.ui.mode === "chat");
   if (ready){
     chat.style.display = "block";
     bar.style.display = "block";
@@ -301,7 +303,7 @@ function unlockChatIfReady(data){
     // =====================================================
   const panel = document.querySelector(".panel");
   if (panel){
-    panel.querySelectorAll("textarea, select, button.primary").forEach(el=>{
+    panel.querySelectorAll("textarea, select, button.primary:not([onclick='sendChat()'])").forEach(el=>{
       if (el.id !== "chatUserInput"){
         el.style.display = "none";
       }
@@ -362,8 +364,12 @@ async function sendChat(){
 }
 
 function renderCobraResponse(data){
-  const out = document.getElementById("output");
+  const out = document.getElementById("output);
   
+  if (data && data.ui && data.ui.mode === "chat") {
+    unlockChatIfReady(data);
+  }
+                                      
 // =====================================================
 // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
 // =====================================================
@@ -376,9 +382,6 @@ function renderCobraResponse(data){
   if (!(data && data.state && data.state.domain0_complete && data.state.domain0b_complete)) {
   out.style.display = "block";
   }
-
-  /* ADDED: unlock rolling chat once backend says D0 + D0B complete */
-  unlockChatIfReady(data);
 
   if (data.domain === "D0" || data.domain === "D0B") {
     out.textContent = data.text || "";
@@ -476,8 +479,6 @@ async function begin(){
     });
 
     const data = await res.json();
-    renderCobraResponse(data);
-    unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
@@ -518,7 +519,6 @@ async function submitMicroCheck(){
 
     const data = await res.json();
     renderCobraResponse(data);
-    unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
