@@ -130,6 +130,55 @@ pre{
   overflow-y:auto;
   display:none;
 }
+
+/* ===================================================== */
+/* ADDED: ChatGPT-style rolling chat container + bubbles  */
+/* (Does NOT remove or replace <pre id="output">)         */
+/* ===================================================== */
+#chat {
+  margin-top: 20px;
+  max-height: 340px;
+  overflow-y: auto;
+  display: none; /* unlocked after D0 + D0B */
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+}
+
+.chatMsg{
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 10px 0;
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
+.chatMsg.user{
+  opacity: .95;
+}
+
+.chatMsg.system{
+  opacity: .9;
+}
+
+#chatInputBar{
+  display:none; /* unlocked after D0 + D0B */
+  margin-top: 14px;
+  gap: 10px;
+}
+
+#chatUserInput{
+  width: 100%;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  resize: vertical;
+}
+
 </style>
 </head>
 
@@ -181,6 +230,21 @@ pre{
 
     <pre id="output"></pre>
 
+    <!-- ===================================================== -->
+    <!-- ADDED: Rolling chat UI (separate from <pre>)           -->
+    <!-- ===================================================== -->
+    <div id="chat"></div>
+
+    <!-- ===================================================== -->
+    <!-- ADDED: Persistent response box + Send button           -->
+    <!-- (Unlocked only after D0 + D0B complete)                -->
+    <!-- ===================================================== -->
+    <div id="chatInputBar">
+      <label>Your response</label>
+      <textarea id="chatUserInput" rows="2"></textarea>
+      <button class="primary" onclick="sendChat()">Send</button>
+    </div>
+
     <div id="thinkingIndicator" style="display:none; margin-top:12px; opacity:.7;">
       Thinking…
     </div>
@@ -219,12 +283,85 @@ function getSessionId(){
   return sid;
 }
 
+/* ===================================================== */
+/* ADDED: Chat helpers (append-only, auto-scroll)         */
+/* ===================================================== */
+function unlockChatIfReady(data){
+  const chat = document.getElementById("chat");
+  const bar = document.getElementById("chatInputBar");
+
+  const ready = !!(data && data.state && data.state.domain0_complete && data.state.domain0b_complete);
+  if (ready){
+    chat.style.display = "block";
+    bar.style.display = "block";
+  }
+}
+
+function addChatMessage(role, text){
+  const chat = document.getElementById("chat");
+  chat.style.display = "block"; // visible once unlocked, but safe to call
+
+  const div = document.createElement("div");
+  div.className = "chatMsg " + role;
+  div.textContent = text;
+  chat.appendChild(div);
+
+  requestAnimationFrame(()=>{
+    chat.scrollTop = chat.scrollHeight;
+  });
+}
+
+/* ===================================================== */
+/* ADDED: Send button handler (persistent input)          */
+/* Uses /cobra/run with session_id and prompt             */
+/* ===================================================== */
+async function sendChat(){
+  const input = document.getElementById("chatUserInput");
+  const text = input.value.trim();
+  if (!text) return;
+
+  addChatMessage("user", text);
+  input.value = "";
+
+  document.getElementById("thinkingIndicator").style.display = "block";
+
+  const payload = {
+    session_id: getSessionId(),
+    prompt: text
+  };
+
+  try{
+    const res = await fetch("/cobra/run", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    renderCobraResponse(data);
+    unlockChatIfReady(data);
+    document.getElementById("thinkingIndicator").style.display = "none";
+
+  } catch(e){
+    document.getElementById("thinkingIndicator").style.display = "none";
+    addChatMessage("system", "ERROR: " + e.message);
+  }
+}
+
 function renderCobraResponse(data){
   const out = document.getElementById("output");
   out.style.display = "block";
 
+  /* ADDED: unlock rolling chat once backend says D0 + D0B complete */
+  unlockChatIfReady(data);
+
   if (data.domain === "D0" || data.domain === "D0B") {
     out.textContent = data.text || "";
+
+    /* ADDED: mirror D0/D0B messages into rolling chat as system messages */
+    if (data.text && data.text.trim()){
+      addChatMessage("system", data.text);
+    }
     return;
   }
 
@@ -239,6 +376,9 @@ function renderCobraResponse(data){
     newText = newText.trim();
   } else if (data.text){
     newText = data.text;
+  } else if (data.message){
+    /* ADDED: some responses may use message */
+    newText = data.message;
   } else {
     newText = "Unexpected response format.";
   }
@@ -256,6 +396,11 @@ function renderCobraResponse(data){
   requestAnimationFrame(()=>{
     out.scrollTop = out.scrollHeight;
   });
+
+  /* ADDED: append system message to rolling chat */
+  if (newText && newText.trim()){
+    addChatMessage("system", newText);
+  }
 }
 
 async function begin(){
@@ -294,6 +439,7 @@ async function begin(){
 
     const data = await res.json();
     renderCobraResponse(data);
+    unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
@@ -301,6 +447,9 @@ async function begin(){
     out.style.display = "block";
     const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
     out.textContent += divider + "ERROR: " + e.message;
+
+    /* ADDED: also show error in rolling chat */
+    addChatMessage("system", "ERROR: " + e.message);
   } finally{
     btn.disabled = false;
     btn.textContent = "Begin";
@@ -310,6 +459,9 @@ async function begin(){
 async function submitMicroCheck(){
   const response = document.getElementById("microResponse").value.trim();
   if (!response) return;
+
+  /* ADDED: show user micro-check response in rolling chat */
+  addChatMessage("user", response);
 
   document.getElementById("microCheckBox").style.display = "none";
   document.getElementById("thinkingIndicator").style.display = "block";
@@ -328,6 +480,7 @@ async function submitMicroCheck(){
 
     const data = await res.json();
     renderCobraResponse(data);
+    unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
@@ -336,6 +489,9 @@ async function submitMicroCheck(){
     out.style.display = "block";
     const divider2 = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
     out.textContent += divider2 + "ERROR: " + e.message;
+
+    /* ADDED: also show error in rolling chat */
+    addChatMessage("system", "ERROR: " + e.message);
   }
 }
 </script>
