@@ -216,20 +216,20 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
         # =====================================================
-    if (state.awaiting_micro_check
-        and not payload.get("micro_response")
-       ):
-           response = {
-               "intent": "MICRO_CHECK",
-               "message": "Please answer the micro-check to continue.",
-               "session_id": session_id,
-               "state": {
-                   "domain0_complete": state.domain0_complete,
-                   "domain0b_complete": state.domain0b_complete,
-               },
-           }
-           log_interaction(payload, response)
-           return response
+        if (state.awaiting_micro_check
+            and not payload.get("micro_response")
+           ):
+               response = {
+                   "intent": "MICRO_CHECK",
+                   "message": "Please answer the micro-check to continue.",
+                   "session_id": session_id,
+                   "state": {
+                       "domain0_complete": state.domain0_complete,
+                       "domain0b_complete": state.domain0b_complete,
+                   },
+               }
+               log_interaction(payload, response)
+               return response
 
         # =====================================================
         # V7 HARD GUARD — Domain 0 / 0B are write-once
