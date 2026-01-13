@@ -146,50 +146,6 @@ def validate_cobra_response(
 
     return (data if not errors else None), errors
 
-
-# =========================
-# RETRY WRAPPER
-# =========================
-def call_model_with_retry(
-    prompt: str,
-    expected_domain: str,
-    expected_phase: str,
-    symbol_universe=None,
-    max_retries: int = 2,
-    strict_schema: bool = False,
-):
-    raw = llm_call(prompt, expected_domain, expected_phase)
-    parsed, errors = validate_cobra_response(
-        raw,
-        expected_domain,
-        expected_phase,
-        symbol_universe=symbol_universe,
-    )
-
-    attempts = 0
-    while errors and attempts < max_retries:
-        retry_prompt = RETRY_PROMPT_TEMPLATE.format(
-            VALIDATION_ERRORS="\n- ".join(errors),
-            EXPECTED_DOMAIN=expected_domain,
-            EXPECTED_PHASE=expected_phase,
-        )
-
-        raw = llm_call(retry_prompt, expected_domain, expected_phase)
-        parsed, errors = validate_cobra_response(
-            raw,
-            expected_domain,
-            expected_phase,
-            symbol_universe=symbol_universe,
-        )
-
-        attempts += 1
-
-    if errors:
-        raise ValueError("Model failed validation after retries: " + "; ".join(errors))
-
-    return parsed
-
-
 # ============================================================
 # V6 COBRA STATE + STRUCTURAL GATES (UNCHANGED)
 # ============================================================
@@ -218,7 +174,7 @@ class CobraState:
     interaction_mode: InteractionMode | None = None
     domain0_complete: bool = False
     domain0b_complete: bool = False 
-    current_domain: Domain = Domain.D0
+    current_domain: str = "D0"
     stamina_used: bool = False
     consolidation_active: bool = False
     last_microcheck_passed: bool = False
@@ -254,6 +210,10 @@ def maybe_add_presence_marker(state: CobraState, repair_event: bool) -> str | No
     if repair_event and state.interaction_mode == InteractionMode.mastery:
         return PRESENCE_MARKERS[0]
     return None
+
+def _assert_no_lmp_mutation(state, before):
+    if state.last_microcheck_passed != before:
+        raise RuntimeError("[V7 VIOLATION] Helper mutated last_microcheck_passed")
 
 
 # ============================================================
@@ -306,13 +266,8 @@ def v7_canonical_domain(domain_value: str) -> str:
     return V7_DOMAIN_CANONICAL_MAP.get(domain_value, domain_value)
 
 def v7_state_domain_label(state: CobraState) -> str:
-    """
-    Returns canonical V7 label for current state domain.
-    """
-    try:
-        return v7_canonical_domain(state.current_domain.value)
-    except Exception:
-        return v7_canonical_domain(str(state.current_domain))
+    return v7_canonical_domain(state.current_domain)
+
 
 def v7_enforce_domain_progression(state: CobraState, expected_domain: str):
     """
@@ -546,6 +501,22 @@ def call_model_with_retry_v7(
                 "expected_response_type": "conceptual"
             }
             return d0
+    # ---------------------------
+    # V7 DOMAIN 0 ATOMIC COMPLETION
+    # ---------------------------
+    if not (
+        state.domain0_complete
+        and state.interaction_mode is not None
+    ):
+        d0 = v7_domain0_response()
+        d0["intent"] = "REPAIR"
+        d0["repair_required"] = True
+        d0["stability_assessment"] = "UNSTABLE"
+        d0["text"] = (
+            d0["text"]
+            + "\n\nREPAIR REQUIRED: Complete both Domain 0 questions and select an interaction mode."
+        )
+        return d0
 
     # ---------------------------
     # V7 DOMAIN 0B
@@ -554,7 +525,7 @@ def call_model_with_retry_v7(
         v7_record_domain0b_answer(state, prompt)
         if not state.domain0b_complete:
             return v7_domain0b_response(state)
-        state.current_domain = Domain.D1
+        state.current_domain = "D1"
 
     current = v7_state_domain_label(state)
     expected_next = v7_expected_next_domain(current)
@@ -589,108 +560,56 @@ def call_model_with_retry_v7(
             raw,
             expected_domain,
             expected_phase,
-            state=state,
+            state=call_model_with_retry_v7state,
             symbol_universe=symbol_universe
         )
         attempts += 1
-
+    
     if errors:
         raise ValueError(
             "Model failed V7 validation after retries: " + "; ".join(errors)
+            )
+
+    if expected_domain not in ("D0", "D0B"):
+        state.last_microcheck_passed = (
+            parsed.get("stability_assessment") == "STABLE"
         )
-    # ---------------------------
-    # V7 POST-SUCCESS ENFORCEMENT
-    # ---------------------------
-    v7_enforce_media_domain(parsed)
-    v7_set_state_domain_after_success(state, expected_domain)
-    v7_apply_interaction_mode_constraints(state, parsed)
 
-    # ---------------------------
-    # V7 FLOW DECISIONS
-    # ---------------------------
-    if (
-        parsed.get("stability_assessment") == "STABLE"
-        and maybe_offer_stamina_gate(state) 
-    ):
-        return v7_stamina_gate_response(state)
-    if state.consolidation_active:
-        return v7_consolidation_response(state)
-
-    # PHASE 1 TRANSFER
-    if (
-        expected_phase == "PHASE_1"
-        and v7_phase1_transfer_required(state)
-        and parsed.get("stability_assessment") == "STABLE"
-        and expected_domain == "D5"
-    ):
-        state.phase1_transfer_complete = True
-        return v7_phase1_transfer_response(state)
-
-    # PHASE 2: TOP-DOWN INVERSION ACTIVATION
-    if (
-        expected_phase == "PHASE_2"
-        and v7_phase2_inversion_required(state) 
-    ):
-        state.phase2_active = True
-        response = v7_phase2_prompt(state)
-        if response:
-            return response
-
-    # PHASE 2 STRESS TEST
-    if v7_phase2_stress_test_required(state):
-        return v7_phase2_stress_test_prompt(state)
+    # --- FIX 6: Presence marker injection (CANONICAL) ---
     
+    _before = state.last_microcheck_passed
+    marker = maybe_add_presence_marker(state, repair_event=True)
+    _assert_no_lmp_mutation(state, _before)
+    if marker:
+        parsed["text"] = marker + "\n\n" + parsed.get("text", "")
+
+    # --- END FIX 6 ---
+
+    # ---------------------------
+    # V7 MASTERY MODE HARD GATE
+    # ---------------------------
+    if (
+        state.interaction_mode == InteractionMode.mastery
+        and parsed.get("stability_assessment") != "STABLE"
+    ):
+        return parsed
+  
     # ---------------------------
     # V7 POST-SUCCESS ENFORCEMENT (ONCE)
     # ---------------------------
     v7_enforce_media_domain(parsed)
     v7_set_state_domain_after_success(state, expected_domain)
+    _before = state.last_microcheck_passed
     v7_apply_interaction_mode_constraints(state, parsed)
-
-    return parsed
-
-    if (
-        parsed.get("stability_assessment") == "STABLE"
-        and maybe_offer_stamina_gate(state)
-    ):
-        return v7_stamina_gate_response(state)
-
-    if state.consolidation_active:
-        return v7_consolidation_response(state)
-
-    # PHASE 1 TRANSFER
-    if (
-        expected_phase == "PHASE_1"
-        and v7_phase1_transfer_required(state)
-        and parsed.get("stability_assessment") == "STABLE"
-        and expected_domain == "D5"
-    ):
-        state.phase1_transfer_complete = True
-        return v7_phase1_transfer_response(state)
-
-    # PHASE 2: TOP-DOWN INVERSION ACTIVATION
-    if (
-        expected_phase == "PHASE_2"
-        and v7_phase2_inversion_required(state)
-    ):
-        state.phase2_active = True
-        response = v7_phase2_prompt(state)
-        if response:
-            return response
-
-    # ---------------------------
-    # V7 PHASE 2 STRESS TEST
-    # ---------------------------
-    if v7_phase2_stress_test_required(state):
-        return v7_phase2_stress_test_prompt(state)
-
-    return parsed
+    _assert_no_lmp_mutation(state, _before)
 
     # V7 ENFORCEMENT: advance state only after success
+    v7_enforce_media_domain(parsed)
     v7_set_state_domain_after_success(state, expected_domain)
+    _before = state.last_microcheck_passed
     v7_apply_interaction_mode_constraints(state, parsed)
+    _assert_no_lmp_mutation(state, _before)
 
-  
 # ============================================================
 # V7 REQUIRED: DOMAIN 0 ENFORCEMENT (MANDATORY FIRST STEP)
 # ============================================================
