@@ -136,8 +136,6 @@ def validate_cobra_response(
                 errors.append(
                     f"symbols_used contains items not in expected symbol_universe: {invalid_used}"
                 )
-                data["intent"] = "REPAIR"
-                data["repair_required"] = True
 
         data["symbol_universe"] = symbol_universe
 
@@ -525,7 +523,6 @@ def call_model_with_retry_v7(
         v7_record_domain0b_answer(state, prompt)
         if not state.domain0b_complete:
             return v7_domain0b_response(state)
-        state.current_domain = "D1"
 
     current = v7_state_domain_label(state)
     expected_next = v7_expected_next_domain(current)
@@ -560,7 +557,7 @@ def call_model_with_retry_v7(
             raw,
             expected_domain,
             expected_phase,
-            state=call_model_with_retry_v7state,
+            state=state,
             symbol_universe=symbol_universe
         )
         attempts += 1
@@ -570,19 +567,22 @@ def call_model_with_retry_v7(
             "Model failed V7 validation after retries: " + "; ".join(errors)
             )
 
-    if expected_domain not in ("D0", "D0B"):
-        state.last_microcheck_passed = (
-            parsed.get("stability_assessment") == "STABLE"
-        )
-
     # --- FIX 6: Presence marker injection (CANONICAL) ---
     
-    _before = state.last_microcheck_passed
-    marker = maybe_add_presence_marker(state, repair_event=True)
-    _assert_no_lmp_mutation(state, _before)
-    if marker:
-        parsed["text"] = marker + "\n\n" + parsed.get("text", "")
-
+    if (
+        state.interaction_mode == InteractionMode.mastery
+        and (
+            parsed.get("repair_required") is True
+            or parsed.get("intent") in ("REPAIR", "MICRO_CHECK")
+            or parsed.get("stability_assessment") != "STABLE"
+        )
+    ):
+        _before = state.last_microcheck_passed
+        marker = maybe_add_presence_marker(state, repair_event=True)
+        _assert_no_lmp_mutation(state, _before)
+        if marker:
+            parsed["text"] = marker + "\n\n" + parsed.get("text", "")
+    
     # --- END FIX 6 ---
 
     # ---------------------------
@@ -593,12 +593,30 @@ def call_model_with_retry_v7(
         and parsed.get("stability_assessment") != "STABLE"
     ):
         return parsed
-  
+    
+    # ---------------------------
+    # V7 STATE COMMIT (AUDITABLE)
+    # ---------------------------
+    # All state mutation for this turn MUST occur below this line.
+
+    # 1) Commit micro-check result (V7 pacing signal)
+    
+    if expected_domain not in ("D0", "D0B"):
+        state.last_microcheck_passed = (
+            parsed.get("stability_assessment") == "STABLE"
+        )
+
+    # 2) Commit domain advancement (single authority)
+    v7_set_state_domain_after_success(state, expected_domain)
+
+    # 3) Commit Domain 0B → D1 transition (explicit V7 rule)
+    if expected_domain == "D0B" and state.domain0b_complete:
+        state.current_domain = "D1"
+
     # ---------------------------
     # V7 POST-SUCCESS ENFORCEMENT (ONCE)
     # ---------------------------
     v7_enforce_media_domain(parsed)
-    v7_set_state_domain_after_success(state, expected_domain)
     _before = state.last_microcheck_passed
     v7_apply_interaction_mode_constraints(state, parsed)
     _assert_no_lmp_mutation(state, _before)
@@ -685,9 +703,6 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
 
     # Mark complete
     state.domain0_complete = True
-
-    # Move state to D0B next (V7 order)
-    state.current_domain = Domain.D0B
 
     return (True, "")
 
