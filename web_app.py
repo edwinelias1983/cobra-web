@@ -125,9 +125,6 @@ def save_session_state(session_id: str, state: CobraState):
 def server_expected_domain(state: CobraState) -> str:
     return v7_state_domain_label(state)
 
-def server_expected_phase(state: CobraState) -> str:
-    return "PHASE_2" if getattr(state, "phase1_transfer_complete", False) else "PHASE_1"
-
 def server_symbol_universe(payload: dict, state: CobraState):
     if "symbol_universe" in payload:
         return payload["symbol_universe"]
@@ -201,33 +198,10 @@ def run_cobra(payload: dict):
         state = load_session_state(session_id)
 
         # =====================================================
-        # V7 HARD PHASE GATE — NO PHASE-2 WITHOUT TRANSFER
-        # =====================================================
-        if getattr(state, "phase2_active", False) and not getattr(state, "phase1_transfer_complete", False):
-            state.phase2_active = False
-
-        # =====================================================
-        # V7 HARD STAMINA GATE — BOUNDED, NON-ADVANCING
-        # =====================================================
-        if getattr(state, "stamina_offered", False):
-        # Stamina gate cannot repeat or affect progression
-            state.stamina_offered = False
-
-        # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
         # =====================================================
         if getattr(state, "awaiting_micro_check", False) and not payload.get("micro_response"):
-               response = {
-                   "intent": "MICRO_CHECK",
-                   "message": "Please answer the micro-check to continue.",
-                   "session_id": session_id,
-                   "state": {
-                       "domain0_complete": state.domain0_complete,
-                       "domain0b_complete": state.domain0b_complete,
-                   },
-               }
-               log_interaction(payload, response)
-               return response
+               pass 
 
         # =====================================================
         # V7 HARD GUARD — Domain 0 / 0B are write-once
@@ -239,52 +213,6 @@ def run_cobra(payload: dict):
 
         if not v7_requires_domain0b(state):
             payload.pop("auditory_response", None)
-
-        # =====================================================
-        # V7 DOMAIN 0 — SERVER-OWNED, ONE-TIME INITIALIZATION
-        # =====================================================
-        if not state.domain0_complete:
-            if not all(k in payload and payload[k] for k in (
-                "interaction_mode",
-                "want_to_understand",
-                "likes"
-            )):
-                response = v7_domain0_response()
-                if isinstance(response, dict):
-                    response["session_id"] = session_id  # <-- ADDED
-                    response["state"] = {  # <-- ADDED
-                        "domain0_complete": state.domain0_complete,
-                        "domain0b_complete": state.domain0b_complete,
-                    }
-                log_interaction(payload, response)
-                return response
-
-            state.interaction_mode = InteractionMode(payload["interaction_mode"])
-            state.symbolic_universe["domain0"] = {
-                "want_to_understand": payload["want_to_understand"],
-                "likes": payload["likes"],
-            }
-            state.domain0_complete = True
-            save_session_state(session_id, state)
-
-        # =====================================================
-        # V7 DOMAIN 0B — AUDITORY SYMBOL MAP
-        # =====================================================
-        if v7_requires_domain0b(state):
-            if "auditory_response" in payload:
-                v7_record_domain0b_answer(state, payload["auditory_response"])
-                save_session_state(session_id, state)
-
-            response = v7_domain0b_response(state)
-            if response:
-                if isinstance(response, dict):
-                    response["session_id"] = session_id  # <-- ADDED
-                    response["state"] = {  # <-- ADDED
-                        "domain0_complete": state.domain0_complete,
-                        "domain0b_complete": state.domain0b_complete,
-                    }
-                log_interaction(payload, response)
-                return response
 
         # ---------------------------
         # Build prompt
@@ -300,42 +228,9 @@ def run_cobra(payload: dict):
         response = call_model_with_retry_v7(
             prompt=prompt,
             state=state,
-            expected_domain=server_expected_domain(state),
-            expected_phase=server_expected_phase(state),
-            symbol_universe=server_symbol_universe(payload, state),
         )
-
-        if isinstance(response, dict):
-            if response.get("intent") in {
-                "MICRO_CHECK",
-                "REPAIR",
-                "TRANSFER_CHECK",
-                "STRESS_TEST",
-                "PHASE2_CHOICE",
-            }:
-                response["advance_allowed"] = False
-            response["session_id"] = session_id  # <-- ADDED
-            response["state"] = {  # <-- ADDED
-                "domain0_complete": state.domain0_complete,
-                "domain0b_complete": state.domain0b_complete,
-            }
 
         save_session_state(session_id, state)
 
     except Exception as e:
-        error_response = {
-            "error": "backend_failure",
-            "message": str(e),
-            "session_id": session_id  # <-- ADDED
-        }
-        # Attach state only if we got far enough to load it
-        if "state" in locals():
-            error_response["state"] = {  # <-- ADDED
-                "domain0_complete": state.domain0_complete,
-                "domain0b_complete": state.domain0b_complete,
-            }
-        log_interaction(payload, error_response)
-        return error_response
-
-    log_interaction(payload, response)
-    return response
+        raise 
