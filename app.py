@@ -603,13 +603,6 @@ def call_model_with_retry_v7(
     v7_apply_interaction_mode_constraints(state, parsed)
     _assert_no_lmp_mutation(state, _before)
 
-    # V7 ENFORCEMENT: advance state only after success
-    v7_enforce_media_domain(parsed)
-    v7_set_state_domain_after_success(state, expected_domain)
-    _before = state.last_microcheck_passed
-    v7_apply_interaction_mode_constraints(state, parsed)
-    _assert_no_lmp_mutation(state, _before)
-
 # ============================================================
 # V7 REQUIRED: DOMAIN 0 ENFORCEMENT (MANDATORY FIRST STEP)
 # ============================================================
