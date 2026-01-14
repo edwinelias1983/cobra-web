@@ -292,8 +292,7 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
- const ready = !!(data && data.state && data.state.domain0_complete === true && data.state.domain0b_complete === true);
-  if (ready){
+ if (data && data.ui && data.ui.unlock_chat === true) {
     chat.style.display = "block";
     bar.style.display = "block";
   
@@ -367,79 +366,27 @@ function renderCobraResponse(data){
 
   const out = document.getElementById("output");
   console.log("renderCobraResponse domain/state:", data.domain, data.state); 
-
-  const ready =
-  !!(data &&
-     data.state &&
-     data.state.domain0_complete === true &&
-     data.state.domain0b_complete === true);
-
-    if (ready){
-      unlockChatIfReady(data)
-    }
-  
-    if (ready) {
-      out.style.display = "none";
-      out.textContent = "";
-      return;
-  }
-                                      
+                            
 // =====================================================
 // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
 // =====================================================
-  if (data && data.state && data.state.domain0_complete && data.state.domain0b_complete) {
-    out.style.display = "none";
-    out.textContent = "";
-  }
 
-  if (data.domain === "D0" || data.domain === "D0B") {
-    const text = data.text || "";
-    out.textContent = text;
+const chatBar = document.getElementById("chatInputBar");
+const microBox = document.getElementById("microCheckBox");
 
-    if (text.trim()) {
-      addChatMessage("system", text);
-    }
-    return;
-
-  }
-
-  let newText = "";
-
-  if (Array.isArray(data.segments) && data.segments.length > 0){
-    data.segments.forEach(seg => {
-      if (seg?.content?.trim()){
-        newText += seg.content + "\n\n";
-      }
-    });
-    newText = newText.trim();
-  } else if (data.text){
-    newText = data.text;
-  } else if (data.message){
-    /* ADDED: some responses may use message */
-    newText = data.message;
-  } else {
-    newText = "Unexpected response format.";
-  }
-
-  if (data.intent === "MICRO_CHECK" && data.micro_check?.prompt){
-    newText += "\n\n— Quick check —\n" + data.micro_check.prompt;
-    document.getElementById("microCheckBox").style.display = "block";
-  } else {
-    document.getElementById("microCheckBox").style.display = "none";
-  }
-
-  const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
-  out.textContent += divider + newText;
-
-  requestAnimationFrame(()=>{
-    out.scrollTop = out.scrollHeight;
-  });
-
-  /* ADDED: append system message to rolling chat */
-  if (newText && newText.trim()){
-    addChatMessage("system", newText);
-  }
+if (data.intent === "MICRO_CHECK" || data.intent === "REPAIR") {
+  chatBar.style.display = "none";
+  microBox.style.display = "block";
+} else {
+  chatBar.style.display = "block";
+  microBox.style.display = "none";
 }
+
+// Canonical V7 / ChatGPT rendering (NO text modification)
+if (typeof data.text === "string" && data.text.trim()) {
+  addChatMessage("system", data.text);
+}
+
 // =====================================================
 // ADDED: force scrollback to latest message (authoritative)
 // =====================================================
