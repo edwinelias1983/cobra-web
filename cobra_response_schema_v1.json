@@ -299,3 +299,5 @@
         "required": ["diagnostic_mapping"]
       }
     }
+  ]
+}
