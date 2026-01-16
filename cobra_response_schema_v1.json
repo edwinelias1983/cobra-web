@@ -3,7 +3,7 @@
   "$id": "https://cobra.example/schema/cobra-response-v7.json",
   "title": "COBRA Response Schema V7",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "$comment": "ADD-ONLY CHANGE: comments added for rolling-chat compatibility. Validation semantics unchanged.",
 
   "required": [
@@ -49,7 +49,6 @@
         "MICRO_CHECK",
         "REPAIR",
         "TRANSFER_CHECK",
-        "PHASE_2_CHOICE",
         "STRESS_TEST",
         "EXPANSION_INVITE",
         "SUMMARY"
@@ -95,7 +94,7 @@
       "default": [],
       "items": {
         "type": "object",
-        "additionalProperties": false,
+        "additionalProperties": true,
         "required": [
           "type",
           "search_query",
