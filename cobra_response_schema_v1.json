@@ -11,12 +11,9 @@
     "phase",
     "intent",
     "text",
-    "symbols_used",
-    "introduced_new_symbols",
     "micro_check",
     "repair_required",
-    "stability_assessment",
-    "next_domain_recommendation"
+    "stability_assessment"
   ],
 
   "properties": {
@@ -31,21 +28,17 @@
         "D3",
         "D3B",
         "D4",
-        "D5",
-        "TRANSFER_CHECK",
-        "PHASE2_SELECT",
-        "PHASE2_STRESS",
-        "EXPANSION"
+        "D5"
       ]
     },
 
     "phase": {
       "type": "string",
       "enum": [
-        "PHASE1",
-        "PHASE2"
+        "PHASE_1",
+        "PHASE_2"
       ],
-      "$comment": "UI NOTE: Your index.html expects PHASE_1/PHASE_2 elsewhere; this schema currently enforces PHASE1/PHASE2."
+      "$comment": "UI NOTE: Your index.html expects PHASE_1/PHASE_2 elsewhere; this schema currently enforces PHASE1/PHASE_2."
     },
 
     "intent": {
@@ -56,7 +49,7 @@
         "MICRO_CHECK",
         "REPAIR",
         "TRANSFER_CHECK",
-        "PHASE2_CHOICE",
+        "PHASE_2_CHOICE",
         "STRESS_TEST",
         "EXPANSION_INVITE",
         "SUMMARY"
@@ -67,42 +60,6 @@
       "type": "string",
       "minLength": 1,
       "$comment": "Rolling chat: text is required canonical output even when segments are present."
-    },
-
-    "segments": {
-      "type": "array",
-      "description": "V7 rolling / append-only UI segments",
-      "$comment": "Rolling chat: when segments are present, UI should render each segment as its own appended message in-order.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["type", "content"],
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "instruction",
-              "symbolic_mapping",
-              "metaphor",
-              "reflection",
-              "micro_check",
-              "confirmation",
-              "repair_note"
-            ]
-          },
-          "content": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      },
-      "default": []
-    },
-
-    "append_only": {
-      "type": "boolean",
-      "default": true,
-      "$comment": "Informational UI hint; server must still enforce invariants."
     },
 
     "advance_allowed": {
@@ -191,11 +148,7 @@
         "expected_response_type": {
           "type": "string",
           "enum": [
-            "short_explanation",
-            "selection",
-            "one_sentence",
-            "yes_no",
-            "list_1_3",
+            "conceptual",
             "symbolic",
             "metaphoric",
             "analogy",
@@ -255,12 +208,7 @@
         "D3",
         "D3B",
         "D4",
-        "D5",
-        "TRANSFER_CHECK",
-        "PHASE2_SELECT",
-        "PHASE2_STRESS",
-        "EXPANSION",
-        "END"
+        "D5"
       ]
     },
 
@@ -330,19 +278,6 @@
     {
       "if": {
         "properties": {
-          "domain": { "const": "D0" },
-          "phase": { "const": "PHASE1" }
-        }
-      },
-      "then": {
-        "properties": {
-          "intent": { "const": "EXPLANATION" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
           "domain": { "enum": ["D1", "D2"] }
         }
       },
@@ -364,18 +299,4 @@
       "then": {
         "required": ["diagnostic_mapping"]
       }
-    },
-    {
-      "if": {
-        "properties": {
-          "intent": { "enum": ["MICRO_CHECK", "REPAIR"] }
-        }
-      },
-      "then": {
-        "properties": {
-          "advance_allowed": { "const": false }
-        }
-      }
     }
-  ]
-}
