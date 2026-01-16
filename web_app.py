@@ -183,6 +183,11 @@ def run_cobra(payload: dict):
 
     payload = normalized
 
+    # V7 HARD RULE: client may never control domain or phase
+    payload.pop("domain", None)
+    payload.pop("phase", None)
+
+
     session_id = payload.get("session_id")  # <-- ADDED (so except can safely attach it if generated)
 
     try:
@@ -201,7 +206,9 @@ def run_cobra(payload: dict):
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
         # =====================================================
         if getattr(state, "awaiting_micro_check", False) and not payload.get("micro_response"):
-               pass 
+            response = state.last_microcheck_response
+            save_session_state(session_id, state)
+            return response 
 
         # =====================================================
         # V7 HARD GUARD — Domain 0 / 0B are write-once
@@ -222,13 +229,37 @@ def run_cobra(payload: dict):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
             if hasattr(state, "awaiting_micro_check"):
                 state.awaiting_micro_check = False
+        
+        # =====================================================
+        # V7 HARD GUARD — prevent Domain 0 / 0B reseeding via prompt
+        # =====================================================
+        if state.domain0_complete:
+            # Prompt may continue conversation, but not reseed symbols
+            pass
+
         # ---------------------------
         # Call V7 engine
         # ---------------------------
+        expected_domain = server_expected_domain(state)
+        expected_phase = "PHASE_2" if getattr(state, "phase2_active", False) else "PHASE_1"
+        symbol_universe = server_symbol_universe(payload, state) or []
+
         response = call_model_with_retry_v7(
             prompt=prompt,
             state=state,
-        )
+            expected_domain=expected_domain,
+            expected_phase=expected_phase,
+            symbol_universe=symbol_universe,
+            )
+        log_interaction(payload, response)
+
+        # =====================================================
+        # V7 MICRO-CHECK ARMING (SERVER-OWNED)
+        # =====================================================
+        
+        if response.get("intent") == "MICRO_CHECK":
+            state.last_microcheck_response = response
+            state.awaiting_micro_check = True
 
         save_session_state(session_id, state)
 
