@@ -280,6 +280,13 @@ def v7_enforce_domain_progression(state: CobraState, expected_domain: str):
     if ni not in (ci, ci + 1):
         raise RuntimeError(f"[V7 VIOLATION] Illegal domain jump: {current} → {expected_domain}")
 
+def v7_set_state_domain_after_success(state: CobraState, expected_domain: str):
+    """
+    V7 single authority for committing the current domain after a successful turn.
+    """
+    if expected_domain in V7_DOMAIN_SEQUENCE:
+        state.current_domain = expected_domain
+
 def v7_expected_microcheck_type(expected_domain: str) -> str:
     if expected_domain in ("D0", "D0B"):
         return "conceptual"
@@ -376,15 +383,6 @@ def v7_enforce_microcheck_type(parsed: dict, expected_domain: str):
         raise RuntimeError(
             f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' "
             f"for domain {expected_domain} (got '{got_type}')"
-        )
-
-    mc = parsed.get("micro_check", {})
-    got_type = mc.get("expected_response_type")
-    want_type = V7_MICROCHECK_TYPE_BY_DOMAIN.get(expected_domain)
-
-    if want_type and got_type != want_type:
-        raise RuntimeError(
-            f"[V7 VIOLATION] micro_check.expected_response_type must be '{want_type}' for domain {expected_domain} (got '{got_type}')"
         )
 
 def v7_enforce_summary_gate(parsed: dict, expected_domain: str):
@@ -621,6 +619,8 @@ def call_model_with_retry_v7(
     v7_apply_interaction_mode_constraints(state, parsed)
     _assert_no_lmp_mutation(state, _before)
 
+    return parsed
+
 # ============================================================
 # V7 REQUIRED: DOMAIN 0 ENFORCEMENT (MANDATORY FIRST STEP)
 # ============================================================
@@ -783,7 +783,7 @@ def v7_stamina_gate_response(state: CobraState) -> dict:
     return {
         "domain": v7_state_domain_label(state),
         "phase": "PHASE_1",
-        "intent": "PHASE2_CHOICE",
+        "intent": "EXPLANATION",
         "introduced_new_symbols": False,
         "repair_required": False,
         "stability_assessment": "STABLE",
@@ -799,7 +799,7 @@ def v7_consolidation_response(state: CobraState) -> dict:
     return {
         "domain": v7_state_domain_label(state),
         "phase": "PHASE_1",
-        "intent": "SUMMARY",
+        "intent": "EXPLANATION",
         "introduced_new_symbols": False,
         "repair_required": False,
         "stability_assessment": "STABLE",
