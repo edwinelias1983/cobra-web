@@ -292,7 +292,7 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
- if (data && data.ui && data.ui.unlock_chat === true) {
+ if (data && data.text && data.intent) {
     chat.style.display = "block";
     bar.style.display = "block";
   
@@ -354,6 +354,7 @@ async function sendChat(){
 
     const data = await res.json();
     renderCobraResponse(data);
+    unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
@@ -390,6 +391,8 @@ if (typeof data.text === "string" && data.text.trim()) {
 // =====================================================
 // ADDED: force scrollback to latest message (authoritative)
 // =====================================================
+
+}
 
 async function begin(){
   const q1 = document.getElementById("q1").value.trim();
