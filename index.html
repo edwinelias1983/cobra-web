@@ -390,12 +390,6 @@ if (typeof data.text === "string" && data.text.trim()) {
 // =====================================================
 // ADDED: force scrollback to latest message (authoritative)
 // =====================================================
-const chat = document.getElementById("chat");
-if (chat){
-  requestAnimationFrame(()=>{
-    chat.scrollTop = chat.scrollHeight;
-  });
-}
 
 async function begin(){
   const q1 = document.getElementById("q1").value.trim();
@@ -407,8 +401,7 @@ async function begin(){
   const btn = document.querySelector("button.primary");
 
   if (!q1 || !q2){
-    out.textContent = "Please answer questions 1 and 2 before continuing.";
-    out.style.display = "block";
+    addChatMessage("system", "Please answer questions 1 and 2 before continuing.");
     return;
   }
   
@@ -441,10 +434,6 @@ async function begin(){
 
   } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
-    out.style.display = "block";
-    const divider = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
-    out.textContent += divider + "ERROR: " + e.message;
-
     /* ADDED: also show error in rolling chat */
     addChatMessage("system", "ERROR: " + e.message);
   } finally{
@@ -481,10 +470,6 @@ async function submitMicroCheck(){
 
   } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
-    const out = document.getElementById("output");
-    out.style.display = "block";
-    const divider2 = out.textContent.trim() ? "\n\n------------------------------\n\n" : "";
-    out.textContent += divider2 + "ERROR: " + e.message;
 
     /* ADDED: also show error in rolling chat */
     addChatMessage("system", "ERROR: " + e.message);
@@ -508,3 +493,4 @@ document.addEventListener("keydown", function(e){
 
 </body>
 </html>
+=====
