@@ -265,6 +265,8 @@ pre{
 </div>
 
 <script>
+let cobraInitialized = false;
+
 function setTheme(t){
   document.body.className = t;
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
@@ -287,32 +289,34 @@ function getSessionId(){
 /* ===================================================== */
 
 function unlockChatIfReady(data){
-  console.log("unlockChatIfReady called with:", data);
+  if (cobraInitialized) return;
 
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
- if (
-  data &&
-  data.state &&
-  data.state.domain0_complete === true &&
-  data.state.domain0b_complete === true
-) {
+  if (
+    data &&
+    data.state &&
+    data.state.domain0_complete === true &&
+    data.state.domain0b_complete === true
+  ) {
 
-  chat.style.display = "block";
-  bar.style.display = "block";
-  
-  const staticNote = document.getElementById("staticSymbolNote");
-  if (staticNote) staticNote.style.display = "none";
-  // =====================================================
-    // ADDED: visually retire initialization inputs
-    // =====================================================
-  const panel = document.querySelector(".panel");
-  if (panel){
-    panel.querySelectorAll("textarea, select, button.primary:not([onclick='sendChat()']):not([onclick='submitMicroCheck()'])").forEach(el=>{
-      if (el.id !== "chatUserInput"){
-        el.style.display = "none";
-      }
+    cobraInitialized = true;   // ← THIS LINE, FIRST INSIDE THE BLOCK
+
+    chat.style.display = "block";
+    bar.style.display = "block";
+
+    const staticNote = document.getElementById("staticSymbolNote");
+    if (staticNote) staticNote.style.display = "none";
+
+    const panel = document.querySelector(".panel");
+    if (panel){
+      panel.querySelectorAll(
+        "textarea, select, button.primary:not([onclick='sendChat()']):not([onclick='submitMicroCheck()'])"
+      ).forEach(el=>{
+        if (el.id !== "chatUserInput"){
+          el.style.display = "none";
+        }
       });
     }
   }
