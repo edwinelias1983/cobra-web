@@ -292,9 +292,15 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
- if (data && data.text && data.intent) {
-    chat.style.display = "block";
-    bar.style.display = "block";
+ if (
+  data &&
+  data.state &&
+  data.state.domain0_complete === true &&
+  data.state.domain0b_complete === true
+) {
+
+  chat.style.display = "block";
+  bar.style.display = "block";
   
   const staticNote = document.getElementById("staticSymbolNote");
   if (staticNote) staticNote.style.display = "none";
