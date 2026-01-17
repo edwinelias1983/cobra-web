@@ -89,6 +89,7 @@ def load_session_state(session_id: str) -> CobraState:
 
     if isinstance(state.interaction_mode, str):
         state.interaction_mode = InteractionMode(state.interaction_mode)
+
     if isinstance(state.current_domain, str):
         state.current_domain = Domain(state.current_domain)
 
