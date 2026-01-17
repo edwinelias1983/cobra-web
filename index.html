@@ -386,10 +386,11 @@ function renderCobraResponse(data){
   const chatBar = document.getElementById("chatInputBar");
   const microBox = document.getElementById("microCheckBox");
 
-  if (data.intent === "MICRO_CHECK" || data.intent === "REPAIR") {
+  if (data.intent === "MICRO_CHECK") {
     chatBar.style.display = "none";
     microBox.style.display = "block";
-  } else {
+  } 
+    else {
     chatBar.style.display = "block";
     microBox.style.display = "none";
   }
