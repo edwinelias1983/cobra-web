@@ -289,11 +289,11 @@ function getSessionId(){
 /* ===================================================== */
 
 function unlockChatIfReady(data){
-  if (cobraInitialized) return;
 
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
+  // Always allow re-evaluation
   if (
     data &&
     data.state &&
@@ -301,31 +301,34 @@ function unlockChatIfReady(data){
     data.state.domain0b_complete === true &&
     data.intent !== "MICRO_CHECK"
   ) {
-    cobraInitialized = true;
 
     chat.style.display = "block";
     bar.style.display = "block";
 
-    const staticNote = document.getElementById("staticSymbolNote");
-    if (staticNote) staticNote.style.display = "none";
+    if (!cobraInitialized) {
+      cobraInitialized = true;
 
-    const panel = document.querySelector(".panel");
-    if (panel){
-      panel.querySelectorAll(
-        "textarea, select, button.primary:not([onclick='sendChat()']):not([onclick='submitMicroCheck()'])"
-      ).forEach(el=>{
-        if (el.id !== "chatUserInput"){
-          el.style.display = "none";
-        }
-      });
+      const staticNote = document.getElementById("staticSymbolNote");
+      if (staticNote) staticNote.style.display = "none";
+
+      const panel = document.querySelector(".panel");
+      if (panel){
+        panel.querySelectorAll(
+          "textarea, select, button.primary:not([onclick='sendChat()']):not([onclick='submitMicroCheck()'])"
+        ).forEach(el=>{
+          if (el.id !== "chatUserInput"){
+            el.style.display = "none";
+          }
+        });
+      }
     }
   }
-} 
-
+}
 
 function addChatMessage(role, text){
+  if (!cobraInitialized) return;   // V7 HARD GATE
+
   const chat = document.getElementById("chat");
-  chat.style.display = "block"; // visible once unlocked, but safe to call
 
   const div = document.createElement("div");
   div.className = "chatMsg " + role;
@@ -336,6 +339,7 @@ function addChatMessage(role, text){
     chat.scrollTop = chat.scrollHeight;
   });
 }
+
 
 /* ===================================================== */
 /* ADDED: Send button handler (persistent input)          */
@@ -362,17 +366,19 @@ async function sendChat(){
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
-
+    
     const data = await res.json();
+
     renderCobraResponse(data);
     unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
-  } catch(e){
-    document.getElementById("thinkingIndicator").style.display = "none";
-    addChatMessage("system", "ERROR: " + e.message);
+
+    } catch(e){
+      document.getElementById("thinkingIndicator").style.display = "none";
+      addChatMessage("system", "ERROR: " + e.message);
+    }
   }
-}
 
 function renderCobraResponse(data){
 
@@ -400,9 +406,10 @@ if (data.intent === "MICRO_CHECK") {
 }
   // Canonical V7 / ChatGPT rendering (NO text modification)
   if (typeof data.text === "string" && data.text.trim()) {
-    addChatMessage("system", data.text);
-  }
+  addChatMessage("system", data.text);
+}
 
+unlockChatIfReady(data);
 }
 
 async function begin(){
@@ -442,7 +449,6 @@ async function begin(){
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
     renderCobraResponse(data);
     unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
