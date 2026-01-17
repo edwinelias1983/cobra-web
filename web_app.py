@@ -263,5 +263,7 @@ def run_cobra(payload: dict):
 
         save_session_state(session_id, state)
 
+        return response
+
     except Exception as e:
         raise 
