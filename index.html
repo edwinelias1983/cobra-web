@@ -386,14 +386,13 @@ function renderCobraResponse(data){
   const chatBar = document.getElementById("chatInputBar");
   const microBox = document.getElementById("microCheckBox");
 
-  if (data.intent === "MICRO_CHECK") {
-    chatBar.style.display = "none";
-    microBox.style.display = "block";
-  } 
-    else {
-    chatBar.style.display = "block";
-    microBox.style.display = "none";
-  }
+ if (data.intent === "MICRO_CHECK") {
+  chatBar.style.display = "none";
+  microBox.style.display = "block";
+} else {
+  chatBar.style.display = "block";
+  microBox.style.display = "none";
+}
 
   // Canonical V7 / ChatGPT rendering (NO text modification)
   if (typeof data.text === "string" && data.text.trim()) {
