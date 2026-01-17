@@ -157,15 +157,13 @@ class InteractionMode(str, Enum):
     mastery = "mastery"
 
 class Domain(str, Enum):
-    D0 = "domain_0"
-    D0B = "domain_0b"
-    D1 = "domain_1"
-    D2 = "domain_2"
-    D2B = "domain_2b"
-    D3 = "domain_3"
-    D3B = "domain_3b"
-    D4 = "domain_4"
-    D5 = "domain_5"
+    D0  = "D0"
+    D0B = "D0B"
+    D1  = "D1"
+    D2  = "D2"
+    D3  = "D3"
+    D4  = "D4"
+    D5  = "D5"
 
 @dataclass
 class CobraState:
