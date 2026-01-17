@@ -365,32 +365,33 @@ async function sendChat(){
 
 function renderCobraResponse(data){
 
+  if (!data || typeof data !== "object") {
+    addChatMessage("system", "ERROR: Invalid response from server.");
+    return;
+  }
+
   const out = document.getElementById("output");
   console.log("renderCobraResponse domain/state:", data.domain, data.state); 
                             
-// =====================================================
-// V7 RULE: After D0 + D0B, legacy <pre> is retired forever
-// =====================================================
+  // =====================================================
+  // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
+  // =====================================================
 
-const chatBar = document.getElementById("chatInputBar");
-const microBox = document.getElementById("microCheckBox");
+  const chatBar = document.getElementById("chatInputBar");
+  const microBox = document.getElementById("microCheckBox");
 
-if (data.intent === "MICRO_CHECK" || data.intent === "REPAIR") {
-  chatBar.style.display = "none";
-  microBox.style.display = "block";
-} else {
-  chatBar.style.display = "block";
-  microBox.style.display = "none";
-}
+  if (data.intent === "MICRO_CHECK" || data.intent === "REPAIR") {
+    chatBar.style.display = "none";
+    microBox.style.display = "block";
+  } else {
+    chatBar.style.display = "block";
+    microBox.style.display = "none";
+  }
 
-// Canonical V7 / ChatGPT rendering (NO text modification)
-if (typeof data.text === "string" && data.text.trim()) {
-  addChatMessage("system", data.text);
-}
-
-// =====================================================
-// ADDED: force scrollback to latest message (authoritative)
-// =====================================================
+  // Canonical V7 / ChatGPT rendering (NO text modification)
+  if (typeof data.text === "string" && data.text.trim()) {
+    addChatMessage("system", data.text);
+  }
 
 }
 
