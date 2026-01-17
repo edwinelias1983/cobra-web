@@ -444,6 +444,7 @@ async function begin(){
 
     const data = await res.json();
     renderCobraResponse(data);
+    unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
   } catch(e){
