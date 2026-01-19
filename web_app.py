@@ -293,9 +293,9 @@ def run_cobra(payload: dict):
         return response
 
     except Exception as e:
-    return {
-        "domain": "SERVER_ERROR",
-        "intent": "ERROR",
-        "text": f"Internal Server Error: {str(e)}"
-    }
+        return {
+            "domain": "SERVER_ERROR",
+            "intent": "ERROR",
+            "text": f"Internal Server Error: {str(e)}"
+        }
 
