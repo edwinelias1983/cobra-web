@@ -203,8 +203,6 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
-        state = load_session_state(session_id)
-
         # =====================================================
         # DOMAIN 0: Commit interaction mode ONCE (SERVER-OWNED)
         # =====================================================
@@ -217,6 +215,8 @@ def run_cobra(payload: dict):
                     status_code=400,
                     detail=f"Invalid interaction_mode: {payload['interaction_mode']}"
                 )
+            
+            print("STATE INTERACTION MODE:", state.interaction_mode)
 
         # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
