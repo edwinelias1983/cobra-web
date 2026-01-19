@@ -203,6 +203,9 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        print("PROBE 1 — RAW PAYLOAD:", payload)
+        print("PROBE 2 — STATE interaction_mode BEFORE:", state.interaction_mode)
+
         # =====================================================
         # DOMAIN 0: Commit interaction mode ONCE (SERVER-OWNED)
         # =====================================================
