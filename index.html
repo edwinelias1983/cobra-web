@@ -293,7 +293,6 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
-  // Always allow re-evaluation
   if (
     data &&
     data.state &&
@@ -301,29 +300,27 @@ function unlockChatIfReady(data){
     data.state.domain0b_complete === true &&
     data.intent !== "MICRO_CHECK"
   ) {
+    cobraInitialized = true;
 
     chat.style.display = "block";
     bar.style.display = "block";
 
-    if (!cobraInitialized) {
-      cobraInitialized = true;
+    const staticNote = document.getElementById("staticSymbolNote");
+    if (staticNote) staticNote.style.display = "none";
 
-      const staticNote = document.getElementById("staticSymbolNote");
-      if (staticNote) staticNote.style.display = "none";
-
-      const panel = document.querySelector(".panel");
-      if (panel){
-        panel.querySelectorAll(
-          "textarea, select, button.primary:not([onclick='sendChat()']):not([onclick='submitMicroCheck()'])"
-        ).forEach(el=>{
-          if (el.id !== "chatUserInput"){
-            el.style.display = "none";
-          }
-        });
-      }
+    const panel = document.querySelector(".panel");
+    if (panel){
+      panel.querySelectorAll(
+        "textarea, select, button.primary:not([onclick='sendChat()']):not([onclick='submitMicroCheck()'])"
+      ).forEach(el=>{
+        if (el.id !== "chatUserInput"){
+          el.style.display = "none";
+        }
+      });
     }
   }
 }
+
 
 function addChatMessage(role, text){
   if (!cobraInitialized) return;   // V7 HARD GATE
@@ -366,8 +363,8 @@ async function sendChat(){
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
-    
-    const data = await res.json();
+
+    const data = await res.json();   // ← MUST EXIST HERE
 
     renderCobraResponse(data);
     unlockChatIfReady(data);
@@ -394,20 +391,22 @@ function renderCobraResponse(data){
   // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
   // =====================================================
 
-const chatBar = document.getElementById("chatInputBar");
-const microBox = document.getElementById("microCheckBox");
+  const chatBar = document.getElementById("chatInputBar");
+  const microBox = document.getElementById("microCheckBox");
 
-if (data.intent === "MICRO_CHECK") {
-  chatBar.style.display = "none";
-  microBox.style.display = "block";
-} else {
-  microBox.style.display = "none";
-  // DO NOT show chatBar here — unlockChatIfReady controls it
-}
-  // Canonical V7 / ChatGPT rendering (NO text modification)
+  if (data.intent === "MICRO_CHECK") {
+    chatBar.style.display = "none";
+    microBox.style.display = "block";
+  } else {
+    microBox.style.display = "none";
+  }
+
+  // chatBar visibility is controlled ONLY by unlockChatIfReady
   if (typeof data.text === "string" && data.text.trim()) {
-  addChatMessage("system", data.text);
+    addChatMessage("system", data.text);
+  }
 }
+
 
 unlockChatIfReady(data);
 }
