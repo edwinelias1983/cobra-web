@@ -323,7 +323,11 @@ function unlockChatIfReady(data){
 
 
 function addChatMessage(role, text){
-  if (!cobraInitialized && role !== "system") return;
+  // V7 RULE:
+  // Before initialization, ALL output is treated as SYSTEM output
+  if (!cobraInitialized) {
+    role = "system";
+  }
 
   const chat = document.getElementById("chat");
 
@@ -336,7 +340,6 @@ function addChatMessage(role, text){
     chat.scrollTop = chat.scrollHeight;
   });
 }
-
 
 /* ===================================================== */
 /* ADDED: Send button handler (persistent input)          */
@@ -357,25 +360,25 @@ async function sendChat(){
     prompt: text
   };
 
-  try{
+  try {
     const res = await fetch("/cobra/run", {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();   // ← MUST EXIST HERE
+    const data = await res.json();
 
     renderCobraResponse(data);
     unlockChatIfReady(data);
     document.getElementById("thinkingIndicator").style.display = "none";
 
-
-    } catch(e){
-      document.getElementById("thinkingIndicator").style.display = "none";
-      addChatMessage("system", "ERROR: " + e.message);
-    }
+  } catch(e) {
+    document.getElementById("thinkingIndicator").style.display = "none";
+    addChatMessage("system", "ERROR: " + e.message);
   }
+}
+
 
 function renderCobraResponse(data){
 
