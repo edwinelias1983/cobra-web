@@ -321,15 +321,13 @@ function unlockChatIfReady(data){
   }
 }
 
-
 function addChatMessage(role, text){
-  // V7 RULE:
-  // Before initialization, ALL output is treated as SYSTEM output
   if (!cobraInitialized) {
     role = "system";
   }
 
   const chat = document.getElementById("chat");
+  chat.style.display = "block"; // ← REQUIRED
 
   const div = document.createElement("div");
   div.className = "chatMsg " + role;
