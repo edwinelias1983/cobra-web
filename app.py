@@ -415,8 +415,12 @@ def normalize_phase_token(phase: str) -> str:
 def normalize_phase_for_schema(phase: str) -> str:
     if not phase:
         return phase
-    phase = phase.strip().upper()
-    return phase.replace("_", "")
+    phase = str(phase).strip().upper()
+    if phase == "PHASE1":
+        return "PHASE_1"
+    if phase == "PHASE2":
+        return "PHASE_2"
+    return phase
 
 def validate_cobra_response_v7(
     raw_text: str,
