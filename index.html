@@ -455,6 +455,8 @@ async function begin(){
     prompt: `Voice: ${voice}`
   };
 
+  console.log("EVIDENCE-1 payload:", payload);
+
   try{
     const res = await fetch("/cobra/run", {
       method:"POST",
