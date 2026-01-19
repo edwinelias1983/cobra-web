@@ -39,6 +39,13 @@ Hard Rules:
 8) Return ONLY the corrected JSON object now.
 """
 
+def normalize_phase_for_schema(phase: str) -> str:
+    if phase == "PHASE1":
+        return "PHASE_1"
+    if phase == "PHASE2":
+        return "PHASE_2"
+    return phase
+
 # =========================
 # LLM CALL (JSON GUARDED)
 # =========================
