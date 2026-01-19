@@ -378,12 +378,28 @@ function renderCobraResponse(data){
   // ===============================
   // V7 HARD GATE: DOMAIN 0 REPAIR
   // ===============================
-  if (data && data.domain === "D0" && data.intent === "REPAIR") {
+  if (
     data &&
+    data.domain === "D0" &&
+    data.intent === "REPAIR" &&
     data.state &&
     data.state.domain0_complete === false
-
   ) {
+  
+    cobraInitialized = false;
+
+    // allow user to respond during Domain 0 repair
+    document.getElementById("chat").style.display = "block";
+    document.getElementById("chatInputBar").style.display = "block";
+
+    // hide legacy begin inputs
+    document.querySelectorAll(
+    "#q1, #q2, #mode, #voice, button.primary"
+    ).forEach(el => {
+      if (el) el.style.display = "none";
+    });
+  }
+
     cobraInitialized = false;
 
   // ✅ ALLOW USER RESPONSE DURING DOMAIN 0 REPAIR
