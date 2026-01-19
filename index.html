@@ -386,19 +386,22 @@ function renderCobraResponse(data){
     data &&
     data.state &&
     data.state.domain0_complete === false
+
   ) {
     cobraInitialized = false;
 
-    // Hide chat during Domain 0 repair
-    document.getElementById("chatInputBar").style.display = "none";
+  // ✅ ALLOW USER RESPONSE DURING DOMAIN 0 REPAIR
+  document.getElementById("chat").style.display = "block";
+  document.getElementById("chatInputBar").style.display = "block";
 
-    // Ensure legacy inputs remain visible
-    document.querySelectorAll(
-      "#q1, #q2, #mode, #voice, button.primary"
-    ).forEach(el => {
-      if (el) el.style.display = "block";
-    });
-  }
+  // Hide legacy begin inputs
+  document.querySelectorAll(
+    "#q1, #q2, #mode, #voice, button.primary"
+  ).forEach(el => {
+    if (el) el.style.display = "none";
+  });
+}
+
 
   if (typeof data.text === "string" && data.text.trim()) {
   document.getElementById("chat").style.display = "block";
@@ -441,7 +444,7 @@ async function begin(){
   }
 
    console.log("PROBE B"); 
-   
+
   // Hide static instructional note as soon as COBRA begins
   const staticNote = document.getElementById("staticSymbolNote");
   if (staticNote) staticNote.style.display = "none";
