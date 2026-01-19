@@ -439,7 +439,9 @@ async function begin(){
     addChatMessage("system", "Please answer questions 1 and 2 before continuing.");
     return;
   }
-  
+
+   console.log("PROBE B"); 
+   
   // Hide static instructional note as soon as COBRA begins
   const staticNote = document.getElementById("staticSymbolNote");
   if (staticNote) staticNote.style.display = "none";
