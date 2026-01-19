@@ -444,8 +444,7 @@ async function begin(){
   const staticNote = document.getElementById("staticSymbolNote");
   if (staticNote) staticNote.style.display = "none";
 
-  btn.disabled = true;
-  btn.textContent = "Working…";
+
   document.getElementById("thinkingIndicator").style.display = "block";
 
   const payload = {
@@ -465,8 +464,11 @@ async function begin(){
 
     const data = await res.json(); 
 
-    btn.disabled = true;
-    btn.textContent = "Working…";
+    // ✅ NEW: actually render the server response
+    renderCobraResponse(data);
+
+    ## btn.disabled = true;
+    ## btn.textContent = "Working…";
     document.getElementById("thinkingIndicator").style.display = "none";
   
     // V7 RULE: Allow immediate retry during Domain 0 repair
@@ -479,7 +481,6 @@ async function begin(){
       btn.textContent = "Begin";
     }
 
-
   } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
     /* ADDED: also show error in rolling chat */
@@ -489,6 +490,7 @@ async function begin(){
     btn.textContent = "Begin";
   }
 }
+
 
 async function submitMicroCheck(){
   const response = document.getElementById("microResponse").value.trim();
