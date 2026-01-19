@@ -293,13 +293,7 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
-  if (
-    data &&
-    data.state &&
-    data.state.domain0_complete === true &&
-    data.state.domain0b_complete === true &&
-    data.intent !== "MICRO_CHECK"
-  ) {
+  if (data && data.intent !== "MICRO_CHECK") {
     cobraInitialized = true;
 
     chat.style.display = "block";
@@ -320,6 +314,7 @@ function unlockChatIfReady(data){
     }
   }
 }
+
 
 function addChatMessage(role, text){
   if (!cobraInitialized) {
@@ -366,6 +361,7 @@ async function sendChat(){
     });
 
     const data = await res.json();
+    console.log("PROBE_FETCH_DATA", data);
 
     renderCobraResponse(data);
     unlockChatIfReady(data);
@@ -382,7 +378,7 @@ function renderCobraResponse(data){
   // ===============================
   // V7 HARD GATE: DOMAIN 0 REPAIR
   // ===============================
-  if (
+  if (data && data.domain === "D0" && data.intent === "REPAIR") {
     data &&
     data.state &&
     data.state.domain0_complete === false
@@ -424,9 +420,8 @@ function renderCobraResponse(data){
   } else {
     microBox.style.display = "none";
   }
-  if (!(data && data.state && data.state.domain0_complete === false)) {
+  if (!(data && data.domain === "D0" && data.intent === "REPAIR")) {
     unlockChatIfReady(data);
-}
 }
 
 async function begin(){
@@ -468,6 +463,8 @@ async function begin(){
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
+
+    console.log("FETCH OK, status:", res.status);
 
     const data = await res.json(); 
 
