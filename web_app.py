@@ -240,12 +240,23 @@ def run_cobra(payload: dict):
         # ---------------------------
         # Build prompt
         # ---------------------------
+   
         prompt = payload.get("prompt", "")
+
+        # DOMAIN 0: inject required answers so V7 can evaluate them
+        if not state.domain0_complete:
+            prompt = (
+                f"Interaction mode: {payload.get('interaction_mode')}\n"
+                f"What do you want to understand today?: {payload.get('want_to_understand')}\n"
+                f"What do you naturally understand or like?: {payload.get('likes')}\n\n"
+                + prompt
+            )
+
         if payload.get("micro_response"):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
             if hasattr(state, "awaiting_micro_check"):
                 state.awaiting_micro_check = False
-        
+
         # =====================================================
         # V7 HARD GUARD — prevent Domain 0 / 0B reseeding via prompt
         # =====================================================
