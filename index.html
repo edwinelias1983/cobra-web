@@ -323,7 +323,7 @@ function unlockChatIfReady(data){
 
 
 function addChatMessage(role, text){
-  if (!cobraInitialized) return;   // V7 HARD GATE
+  if (!cobraInitialized && role !== "system") return;
 
   const chat = document.getElementById("chat");
 
@@ -408,9 +408,6 @@ function renderCobraResponse(data){
 }
 
 
-unlockChatIfReady(data);
-}
-
 async function begin(){
   const q1 = document.getElementById("q1").value.trim();
   const q2 = document.getElementById("q2").value.trim();
@@ -447,6 +444,8 @@ async function begin(){
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
+
+    const data = await res.json(); 
 
     renderCobraResponse(data);
     unlockChatIfReady(data);
