@@ -377,12 +377,32 @@ async function sendChat(){
   }
 }
 
-
 function renderCobraResponse(data){
 
-  if (!data || typeof data !== "object") {
-    addChatMessage("system", "ERROR: Invalid response from server.");
-    return;
+  // ===============================
+  // V7 HARD GATE: DOMAIN 0 REPAIR
+  // ===============================
+  if (
+    data &&
+    data.state &&
+    data.state.domain0_complete === false
+  ) {
+    cobraInitialized = false;
+
+    // Hide chat during Domain 0 repair
+    document.getElementById("chatInputBar").style.display = "none";
+
+    // Ensure legacy inputs remain visible
+    document.querySelectorAll(
+      "#q1, #q2, #mode, #voice, button.primary"
+    ).forEach(el => {
+      if (el) el.style.display = "block";
+    });
+  }
+
+  if (typeof data.text === "string" && data.text.trim()) {
+  document.getElementById("chat").style.display = "block";
+  addChatMessage("system", data.text);
   }
 
   const out = document.getElementById("output");
@@ -401,13 +421,10 @@ function renderCobraResponse(data){
   } else {
     microBox.style.display = "none";
   }
-
-  // chatBar visibility is controlled ONLY by unlockChatIfReady
-  if (typeof data.text === "string" && data.text.trim()) {
-    addChatMessage("system", data.text);
-  }
+  if (!(data && data.state && data.state.domain0_complete === false)) {
+    unlockChatIfReady(data);
 }
-
+}
 
 async function begin(){
   const q1 = document.getElementById("q1").value.trim();
@@ -448,9 +465,20 @@ async function begin(){
 
     const data = await res.json(); 
 
-    renderCobraResponse(data);
-    unlockChatIfReady(data);
+    btn.disabled = true;
+    btn.textContent = "Working…";
     document.getElementById("thinkingIndicator").style.display = "none";
+  
+    // V7 RULE: Allow immediate retry during Domain 0 repair
+    if (
+      data &&
+      data.state &&
+      data.state.domain0_complete === false
+    ) {
+      btn.disabled = false;
+      btn.textContent = "Begin";
+    }
+
 
   } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
