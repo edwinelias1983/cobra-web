@@ -245,12 +245,6 @@ def run_cobra(payload: dict):
             payload.pop("auditory_response", None)
         
         # -------------------------------------------------
-        # V7 DOMAIN 0B ANSWER RECORD (SERVER-OWNED, TIMING FIX)
-        # -------------------------------------------------
-        if payload.get("auditory_response"):
-            v7_record_domain0b_answer(state, payload["auditory_response"])
-
-        # -------------------------------------------------
         # V7 DOMAIN 0B ANSWER RECORDING (SERVER-OWNED)
         # -------------------------------------------------
         
