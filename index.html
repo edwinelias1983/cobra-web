@@ -381,7 +381,8 @@ async function sendChat(){
 }
 
 function renderCobraResponse(data){
-
+  window.__lastResponse = data;
+  
   // ===============================
   // V7 HARD GATE: DOMAIN 0 REPAIR
   // ===============================
@@ -465,6 +466,7 @@ async function begin(){
     interaction_mode: mode,
     want_to_understand: q1,
     likes: q2,
+    auditory_response: voice,
     prompt: `Voice: ${voice}`
   };
 

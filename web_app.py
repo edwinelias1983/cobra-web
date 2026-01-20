@@ -243,13 +243,7 @@ def run_cobra(payload: dict):
 
         if not v7_requires_domain0b(state):
             payload.pop("auditory_response", None)
-        
-        # -------------------------------------------------
-        # V7 DOMAIN 0B ANSWER RECORDING (SERVER-OWNED)
-        # -------------------------------------------------
-        
-        if payload.get("auditory_response"):
-            v7_record_domain0b_answer(state, payload["auditory_response"])
+    
         
         # ---------------------------
         # Build prompt
@@ -297,20 +291,6 @@ def run_cobra(payload: dict):
         # -------------------------------------------------
         # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
         # -------------------------------------------------
-        
-        # DOMAIN 0 completes when required inputs exist
-        if not getattr(state, "domain0_complete", False):
-            if (
-                payload.get("interaction_mode")
-                and payload.get("want_to_understand")
-                and payload.get("likes")
-            ):
-                state.domain0_complete = True
-
-        # DOMAIN 0B completes when auditory response exists
-        if not getattr(state, "domain0b_complete", False):
-            if payload.get("auditory_response"):
-                state.domain0b_complete = True
 
         if isinstance(response.get("domain"), str):
             try:
