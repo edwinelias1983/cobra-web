@@ -303,12 +303,20 @@ def run_cobra(payload: dict):
         # -------------------------------------------------
         # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
         # -------------------------------------------------
-        if response.get("domain") == "D0":
-            v7_domain0_response(state, response)
-
-        if response.get("domain") == "D0B":
-            v7_domain0b_response(state, response)
         
+        # DOMAIN 0 completes when required inputs exist
+        if not getattr(state, "domain0_complete", False):
+            if (
+                payload.get("interaction_mode")
+                and payload.get("want_to_understand")
+                and payload.get("likes")
+            ):
+                state.domain0_complete = True
+
+        # DOMAIN 0B completes when auditory response exists
+        if not getattr(state, "domain0b_complete", False):
+            if payload.get("auditory_response"):
+                state.domain0b_complete = True
 
         if isinstance(response.get("domain"), str):
             try:
