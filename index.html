@@ -239,7 +239,7 @@ pre{
     <!-- (Unlocked only after D0 + D0B complete)                -->
     <!-- ===================================================== -->
     <div id="chatInputBar">
-      <label>Your response</label>
+      <label>Next move</label>
       <textarea id="chatUserInput" rows="2"></textarea>
       <button class="primary" onclick="sendChat()">Send</button>
     </div>
@@ -293,7 +293,13 @@ function unlockChatIfReady(data){
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
-  if (data && data.intent !== "MICRO_CHECK") {
+  if (
+    data &&
+    data.state &&
+    data.state.domain0_complete === true &&
+    data.intent !== "MICRO_CHECK"
+  ) {
+
     cobraInitialized = true;
 
     chat.style.display = "block";
