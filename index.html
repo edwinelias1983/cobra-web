@@ -382,7 +382,7 @@ async function sendChat(){
 
 function renderCobraResponse(data){
   window.__lastResponse = data;
-  
+
   // ===============================
   // V7 HARD GATE: DOMAIN 0 REPAIR
   // ===============================
@@ -398,13 +398,6 @@ function renderCobraResponse(data){
     // allow user to respond during Domain 0 repair
     document.getElementById("chat").style.display = "block";
     document.getElementById("chatInputBar").style.display = "block";
-
-    // hide legacy begin inputs
-    document.querySelectorAll(
-      "#q1, #q2, #mode, #voice, button.primary"
-    ).forEach(el => {
-      if (el) el.style.display = "none";
-    });
   }
 
   // ===============================
@@ -447,10 +440,14 @@ async function begin(){
   const out = document.getElementById("output");
   const btn = document.querySelector("button.primary");
 
-  if (!q1 || !q2){
-    addChatMessage("system", "Please answer questions 1 and 2 before continuing.");
+  if (!q1 || !q2 || !mode) {
+    addChatMessage(
+      "system",
+      "Domain 0 incomplete. You must answer both questions and select an interaction mode."
+    );
     return;
   }
+
 
    console.log("PROBE B"); 
 
