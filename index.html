@@ -385,7 +385,6 @@ function renderCobraResponse(data){
     data.state &&
     data.state.domain0_complete === false
   ) {
-  
     cobraInitialized = false;
 
     // allow user to respond during Domain 0 repair
@@ -394,39 +393,25 @@ function renderCobraResponse(data){
 
     // hide legacy begin inputs
     document.querySelectorAll(
-    "#q1, #q2, #mode, #voice, button.primary"
+      "#q1, #q2, #mode, #voice, button.primary"
     ).forEach(el => {
       if (el) el.style.display = "none";
     });
   }
 
-    cobraInitialized = false;
-
-  // ✅ ALLOW USER RESPONSE DURING DOMAIN 0 REPAIR
-  document.getElementById("chat").style.display = "block";
-  document.getElementById("chatInputBar").style.display = "block";
-
-  // Hide legacy begin inputs
-  document.querySelectorAll(
-    "#q1, #q2, #mode, #voice, button.primary"
-  ).forEach(el => {
-    if (el) el.style.display = "none";
-  });
-}
-
-
+  // ===============================
+  // Render system text (all domains)
+  // ===============================
   if (typeof data.text === "string" && data.text.trim()) {
-  document.getElementById("chat").style.display = "block";
-  addChatMessage("system", data.text);
+    document.getElementById("chat").style.display = "block";
+    addChatMessage("system", data.text);
   }
 
-  const out = document.getElementById("output");
-  console.log("renderCobraResponse domain/state:", data.domain, data.state); 
-                            
-  // =====================================================
-  // V7 RULE: After D0 + D0B, legacy <pre> is retired forever
-  // =====================================================
+  console.log("renderCobraResponse domain/state:", data.domain, data.state);
 
+  // =====================================================
+  // MICRO-CHECK UI (authoritative)
+  // =====================================================
   const chatBar = document.getElementById("chatInputBar");
   const microBox = document.getElementById("microCheckBox");
 
@@ -436,8 +421,13 @@ function renderCobraResponse(data){
   } else {
     microBox.style.display = "none";
   }
+
+  // =====================================================
+  // Permanent unlock ONLY after D0 + D0B
+  // =====================================================
   if (!(data && data.domain === "D0" && data.intent === "REPAIR")) {
     unlockChatIfReady(data);
+  }
 }
 
 async function begin(){
