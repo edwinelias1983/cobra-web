@@ -221,10 +221,17 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
         # =====================================================
+        
         if getattr(state, "awaiting_micro_check", False) and not payload.get("micro_response"):
             response = state.last_microcheck_response
+
+            response["state"] = {
+                "domain0_complete": bool(getattr(state, "domain0_complete", False)),
+                "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
+            }
+
             save_session_state(session_id, state)
-            return response 
+            return response
 
         # =====================================================
         # V7 HARD GUARD — Domain 0 / 0B are write-once
@@ -236,7 +243,20 @@ def run_cobra(payload: dict):
 
         if not v7_requires_domain0b(state):
             payload.pop("auditory_response", None)
+        
+        # -------------------------------------------------
+        # V7 DOMAIN 0B ANSWER RECORD (SERVER-OWNED, TIMING FIX)
+        # -------------------------------------------------
+        if payload.get("auditory_response"):
+            v7_record_domain0b_answer(state, payload["auditory_response"])
 
+        # -------------------------------------------------
+        # V7 DOMAIN 0B ANSWER RECORDING (SERVER-OWNED)
+        # -------------------------------------------------
+        
+        if payload.get("auditory_response"):
+            v7_record_domain0b_answer(state, payload["auditory_response"])
+        
         # ---------------------------
         # Build prompt
         # ---------------------------
@@ -280,6 +300,29 @@ def run_cobra(payload: dict):
             )
         log_interaction(payload, response)
 
+        # -------------------------------------------------
+        # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
+        # -------------------------------------------------
+        if response.get("domain") == "D0":
+            v7_domain0_response(state, response)
+
+        if response.get("domain") == "D0B":
+            v7_domain0b_response(state, response)
+        
+
+        if isinstance(response.get("domain"), str):
+            try:
+                state.current_domain = Domain(response["domain"])
+            except ValueError:
+                pass
+
+        # -------------------------------------------------
+        # V7 PHASE COMMIT (SERVER-OWNED)
+        # -------------------------------------------------
+
+        if response.get("phase") == "PHASE_2":
+            state.phase2_active = True
+
         # =====================================================
         # V7 MICRO-CHECK ARMING (SERVER-OWNED)
         # =====================================================
@@ -287,6 +330,15 @@ def run_cobra(payload: dict):
         if response.get("intent") == "MICRO_CHECK":
             state.last_microcheck_response = response
             state.awaiting_micro_check = True
+        
+        # -------------------------------------------------
+        # V7 UI CONTRACT: surface server-owned state
+        # -------------------------------------------------
+        response["state"] = {
+            "domain0_complete": bool(getattr(state, "domain0_complete", False)),
+            "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
+        }
+
 
         save_session_state(session_id, state)
 
