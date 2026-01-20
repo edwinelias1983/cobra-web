@@ -403,7 +403,9 @@ function renderCobraResponse(data){
   // Render system text (all domains)
   // ===============================
   if (typeof data.text === "string" && data.text.trim()) {
-    document.getElementById("chat").style.display = "block";
+    const chat = document.getElementById("chat");
+    chat.style.display = "block";
+    chat.style.visibility = "visible";
     addChatMessage("system", data.text);
   }
 
