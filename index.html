@@ -438,14 +438,13 @@ async function begin(){
   const voice = document.getElementById("voice").value.trim();
 
   const out = document.getElementById("output");
-  const btn = document.querySelector("button.primary");
+  const btn = document.querySelector("button.primary[onclick='begin()']");
 
   if (!q1 || !q2 || !mode) {
     addChatMessage(
       "system",
       "Domain 0 incomplete. You must answer both questions and select an interaction mode."
     );
-    return;
   }
 
 
