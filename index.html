@@ -406,7 +406,7 @@ function renderCobraResponse(data){
     const chat = document.getElementById("chat");
     chat.style.display = "block";
     chat.style.visibility = "visible";
-    addChatMessage("system", data.text);
+    addChatMessage("system", `[${data.domain}/${data.phase}/${data.intent}] ${data.text}`);
   }
 
   console.log("renderCobraResponse domain/state:", data.domain, data.state);
