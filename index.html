@@ -379,6 +379,75 @@ async function sendChat(){
   }
 }
 
+function setInputLocked(locked){
+  const bar = document.getElementById("chatInputBar");
+  const input = document.getElementById("chatUserInput");
+  const sendBtn = bar ? bar.querySelector("button.primary") : null;
+
+  if (!bar || !input || !sendBtn) return;
+
+  input.disabled = locked;
+  sendBtn.disabled = locked;
+
+  bar.style.opacity = locked ? "0.4" : "1";
+  bar.style.pointerEvents = locked ? "none" : "auto";
+}
+
+function applyDomainGovernor(data){
+  const chat = document.getElementById("chat");
+  const bar = document.getElementById("chatInputBar");
+  const microBox = document.getElementById("microCheckBox");
+
+  // HARD RESET — start from nothing
+  chat.style.display = "none";
+  bar.style.display = "none";
+  microBox.style.display = "none";
+
+  if (!data || !data.domain) return;
+
+  // D0 QUESTION — system speaks, user listens
+  if (data.domain === "D0" && data.intent === "QUESTION") {
+    chat.style.display = "block";
+    return;
+  }
+
+  // MICRO-CHECK — lock everything else
+  if (data.intent === "MICRO_CHECK") {
+    chat.style.display = "block";
+    microBox.style.display = "block";
+    return;
+  }
+
+  // D0 REPAIR — constrained interaction
+  if (data.domain === "D0" && data.intent === "REPAIR") {
+    chat.style.display = "block";
+    bar.style.display = "block";
+    return;
+  }
+
+  // POST-D0 — normal operation
+  if (data.state && data.state.domain0_complete === true) {
+    chat.style.display = "block";
+    bar.style.display = "block";
+  }
+}
+
+function commitSymbolicUniverseOnce(data){
+  if (!data || !data.state || data.state.domain0_complete !== true) return;
+
+  // Only commit once per session
+  if (window.__symbolicUniverseLocked) return;
+
+  window.__symbolicUniverse = {
+    domain0: {
+      want_to_understand: window.__lastPayload?.want_to_understand || null,
+      likes: window.__lastPayload?.likes || null
+    }
+  };
+
+  window.__symbolicUniverseLocked = true;
+}
+
 function renderCobraResponse(data){
   window.__lastResponse = data;
 
@@ -430,6 +499,7 @@ function renderCobraResponse(data){
   if (!(data && data.domain === "D0" && data.intent === "REPAIR")) {
     unlockChatIfReady(data);
   }
+  applyDomainGovernor(data);
 }
 
 async function begin(){
@@ -467,6 +537,9 @@ async function begin(){
     prompt: `Voice: ${voice}`
   };
 
+  /* ADD THIS LINE */
+  window.__lastPayload = payload;
+  
   console.log("EVIDENCE-1 payload:", payload);
 
   try{
