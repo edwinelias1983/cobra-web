@@ -179,6 +179,24 @@ pre{
   resize: vertical;
 }
 
+ #cobra-output {
+    margin-top: 24px;
+  }
+
+  #cobra-output .image-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+
+  #cobra-output .image-row img {
+    width: 100%;
+    max-width: 200px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
 </style>
 </head>
 
@@ -248,11 +266,22 @@ pre{
       Thinking…
     </div>
 
-    <div id="microCheckBox" style="display:none; margin-top:16px;">
-      <label>Quick check response</label>
-      <textarea id="microResponse" rows="2"></textarea>
-      <button class="primary" onclick="submitMicroCheck()">Continue</button>
-    </div>
+      <div id="microCheckBox" style="display:none; margin-top:16px;">
+        <h3>Micro-check (Domain 1 — REQUIRED)</h3>
+        <p>Answer in one sentence, using only Sopranos or Barça language.</p>
+        <p><em>In your words: what is a “state” — without using science terms?</em></p>
+        <p style="font-size: 0.9em; opacity: 0.8;">
+          Example structure — don’t copy: “A state is like ______ when ______.”
+        </p>
+        <p style="font-size: 0.9em; opacity: 0.8;">
+          We stay in Domain 1 until this is stable.
+        </p>
+        <label>Your response</label>
+        <textarea id="microResponse" rows="2"></textarea>
+        <button class="primary" onclick="submitMicroCheck()">Continue</button>
+      </div>
+
+
 
     <div class="note" id="staticConsentNote">
       COBRA does not ask for abstract parameters.<br/>
@@ -502,6 +531,57 @@ function renderCobraResponse(data){
   applyDomainGovernor(data);
 }
 
+function renderDomain1Demo() {
+  const blocks = [
+    {
+      type: 'header',
+      text: 'DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)'
+    },
+    {
+      type: 'subtext',
+      text: 'I’ll introduce only simple symbols, pulled directly from your world. No explanations yet — just anchors.'
+    },
+    {
+      type: 'image_row',
+      images: [
+        { src: 'sopranos-therapy.jpg', alt: 'Sopranos therapy room' },
+        { src: 'family-chart.png', alt: 'Family structure chart' },
+        { src: 'barca-passing.png', alt: 'Barça passing map' }
+      ]
+    },
+    {
+      type: 'grouped_list',
+      title: 'From The Sopranos',
+      items: [
+        'The Family → a closed system',
+        'Tony → central node under pressure',
+        'Crews → semi-independent units',
+        'Therapy room → hidden/internal layer',
+        'Trust / betrayal → unstable alignment'
+      ]
+    },
+    {
+      type: 'grouped_list',
+      title: 'From FC Barcelona',
+      items: [
+        'The Ball → information / state',
+        'Passing → interaction',
+        'Midfield triangle → coordination under constraints',
+        'Possession → control without force',
+        'System > individual → structure dominates outcomes'
+      ]
+    },
+    {
+      type: 'instruction',
+      text: 'Using only your symbols, notice: system, state, interaction, constraint, uncertainty, observation.'
+    }
+  ];
+
+  if (typeof renderBlocks === 'function') {
+    renderBlocks(blocks);
+  }
+}
+
 async function begin(){
   const q1 = document.getElementById("q1").value.trim();
   const q2 = document.getElementById("q2").value.trim();
@@ -569,17 +649,74 @@ async function begin(){
       btn.textContent = "Begin";
     }
 
-  } catch(e){
+    } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
-    /* ADDED: also show error in rolling chat */
     addChatMessage("system", "ERROR: " + e.message);
   } finally{
     btn.disabled = false;
     btn.textContent = "Begin";
   }
+
+  renderDomain1Demo();
 }
 
 
+function renderBlocks(blocks) {
+  const container = document.getElementById('cobra-output');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  blocks.forEach(block => {
+    if (block.type === 'header') {
+      const h = document.createElement('h2');
+      h.textContent = block.text;
+      container.appendChild(h);
+    }
+
+    if (block.type === 'subtext') {
+      const p = document.createElement('p');
+      p.textContent = block.text;
+      container.appendChild(p);
+    }
+
+    if (block.type === 'image_row') {
+      const row = document.createElement('div');
+      row.className = 'image-row';
+      block.images.forEach(img => {
+        const imgEl = document.createElement('img');
+        imgEl.src = img.src;
+        imgEl.alt = img.alt || '';
+        row.appendChild(imgEl);
+      });
+      container.appendChild(row);
+    }
+
+    if (block.type === 'grouped_list') {
+      const title = document.createElement('h3');
+      title.textContent = block.title;
+      container.appendChild(title);
+
+      const ul = document.createElement('ul');
+      block.items.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        ul.appendChild(li);
+      });
+      container.appendChild(ul);
+    }
+
+    if (block.type === 'instruction') {
+      const p = document.createElement('p');
+      p.textContent = block.text;
+      container.appendChild(p);
+    }
+  });
+}
+
+function submitMicroCheck() {
+  // your existing code stays here, unchanged
+}
 async function submitMicroCheck(){
   const response = document.getElementById("microResponse").value.trim();
   if (!response) return;
