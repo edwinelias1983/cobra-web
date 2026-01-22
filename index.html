@@ -252,6 +252,9 @@ pre{
     <!-- ===================================================== -->
     <div id="chat"></div>
 
+    <!-- NEW: COBRA domain output area -->
+    <div id="cobra-output"></div>
+
     <!-- ===================================================== -->
     <!-- ADDED: Persistent response box + Send button           -->
     <!-- (Unlocked only after D0 + D0B complete)                -->
@@ -662,8 +665,6 @@ async function begin(){
     btn.disabled = false;
     btn.textContent = "Begin";
   }
-
-  renderDomain1Demo();
 }
 
 
