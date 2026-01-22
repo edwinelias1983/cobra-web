@@ -384,10 +384,15 @@ def run_cobra(payload: dict):
             # Prompt may continue conversation, but not reseed symbols
             pass
 
-        # ---------------------------
+        ## ---------------------------
         # Call V7 engine
         # ---------------------------
         expected_domain = server_expected_domain(state)
+
+        # HARD OVERRIDE: once Domain 0 is complete, push into Domain 1
+        if getattr(state, "domain0_complete", False):
+            expected_domain = Domain.D1
+
         expected_phase = "PHASE_2" if getattr(state, "phase2_active", False) else "PHASE_1"
         symbol_universe = server_symbol_universe(payload, state) or []
 
@@ -401,7 +406,12 @@ def run_cobra(payload: dict):
             expected_domain=expected_domain,
             expected_phase=expected_phase,
             symbol_universe=symbol_universe,
-            )
+        )
+
+        # If server expects D1 but model still said D0, coerce to D1
+        if getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
+            response["domain"] = "D1"
+
         log_interaction(payload, response)
 
             # A4: Commit symbolic universe to state when Domain 0 completes
