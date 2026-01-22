@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from enum import Enum
 from app import Domain
 
@@ -22,6 +23,7 @@ import uuid
 from pathlib import Path
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ============================================================
 # PERSISTENT STORAGE (SQLite)
@@ -152,11 +154,12 @@ def server_symbol_universe(payload: dict, state: CobraState):
 def ensure_domain1_structure(response: dict) -> dict:
     """
     Make sure Domain 1 responses have the structured payload and micro_check fields
-    that the V7 UI expects.
+    that the V7 UI expects, and inject the Domain 1 mapping text.
     """
     if response.get("domain") != "D1":
         return response
 
+    # 1) Ensure DOMAIN 1 symbolic visual block (what you already had)
     payload = response.get("payload") or {}
     blocks = payload.get("blocks") or []
 
@@ -164,14 +167,14 @@ def ensure_domain1_structure(response: dict) -> dict:
         blocks = [
             {
                 "type": "header",
-                "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)"
+                "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)",
             },
             {
                 "type": "subtext",
                 "text": (
                     "I’ll introduce only simple symbols, pulled directly from your world. "
                     "No explanations yet — just anchors."
-                )
+                ),
             },
             {
                 "type": "image_row",
@@ -215,6 +218,35 @@ def ensure_domain1_structure(response: dict) -> dict:
     payload["blocks"] = blocks
     response["payload"] = payload
 
+    # 2) NEW: append “Quantum physics — stripped…” mapping into response["text"]
+    text = (response.get("text") or "").strip()
+    mapping_header = "Quantum physics — stripped of jargon:"
+
+    # Avoid duplicating the mapping if the model ever echoes it
+    if mapping_header not in text:
+        mapping_lines = [
+            "",
+            mapping_header,
+            "",
+            "- System = the whole Sopranos family network or the entire Barça squad on the pitch.",
+            "- State = how things are right now — who is where, who is stable or under pressure.",
+            "- Interaction = the concrete moves: a conversation in therapy, a pass between players, a sudden shift in trust.",
+            "- Constraint = the rules, debts, loyalties, and tactics that limit what anyone can do next.",
+            "- Uncertainty = what nobody can fully predict — who will flip, where the ball will actually end up, which plan breaks.",
+            "- Observation = the moment something becomes visible: the therapist hearing the truth, the camera seeing a play, the crowd finally understanding the pattern.",
+            "",
+            "We stay inside these symbols only; no physics language yet.",
+        ]
+        mapping_block = "\n".join(mapping_lines)
+
+        if text:
+            text = text + "\n\n" + mapping_block
+        else:
+            text = mapping_block
+
+        response["text"] = text
+
+    # 3) Ensure Domain 1 micro-check scaffold (unchanged)
     micro_check = response.get("micro_check") or {}
     micro_check.setdefault("required", True)
     micro_check.setdefault(
@@ -227,11 +259,12 @@ def ensure_domain1_structure(response: dict) -> dict:
     )
     micro_check.setdefault(
         "prompt",
-        'In your words: what is a "state" — without using science terms?'
+        'In your words: what is a "state" — without using science terms?',
     )
     response["micro_check"] = micro_check
 
     return response
+
 
 def domain1_style_instruction() -> str:
     """
@@ -441,6 +474,35 @@ def run_cobra(payload: dict):
             state.phase2_active = True
 
         # =====================================================
+        # SERVER FALLBACK: First D1 micro-check if model forgets
+        # =====================================================
+        if (
+            getattr(state, "domain0_complete", False)
+            and response.get("domain") == "D1"
+            and not getattr(state, "domain1_microcheck_shown", False)
+            and response.get("intent") != "MICRO_CHECK"
+        ):
+            # Let ensure_domain1_structure create / normalize micro_check
+            response = ensure_domain1_structure(response)
+            mc = response.get("micro_check") or {}
+            mc.setdefault("required", True)
+            mc.setdefault("rules", [
+                "One sentence.",
+                "Use only Sopranos or Barça language.",
+                "No science terms yet.",
+            ])
+            mc.setdefault(
+                "prompt",
+                'In your words: what is a "state" — without using science terms?',
+            )
+            response["micro_check"] = mc
+
+            response["intent"] = "MICRO_CHECK"
+            state.domain1_microcheck_shown = True
+            state.last_microcheck_response = response
+            state.awaiting_micro_check = True
+
+        # =====================================================
         # V7 MICRO-CHECK ARMING (SERVER-OWNED)
         # =====================================================
         
@@ -456,6 +518,43 @@ def run_cobra(payload: dict):
             "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
         }
 
+        # -------------------------------------------------
+        # NEW: Domain 1 intro preface on first D1 turn
+        # -------------------------------------------------
+        if (
+            response.get("domain") == "D1"
+            and not getattr(state, "phase2_active", False)  # still in PHASE_1
+            and not getattr(state, "domain1_intro_shown", False)
+        ):
+            # Build the intro from state
+            symbolic_universe_label = " + ".join(
+                getattr(state, "symbol_universe_labels", [])
+            ) if getattr(state, "symbol_universe_labels", None) else "your symbols"
+
+            mode = getattr(state, "interaction_mode", None)
+            mode_label = (
+                mode.value.capitalize()
+                if hasattr(mode, "value")
+                else str(mode) if mode else "Unknown"
+            )
+
+            intro_lines = [
+                "Good. Domain 0 is now locked.",
+                f"Symbolic universe = {symbolic_universe_label}",
+                f"Mode = {mode_label}",
+                "",
+                "We move bottom-up.",
+                "",
+            ]
+
+            intro_text = "\n".join(intro_lines)
+            existing_text = response.get("text") or ""
+            response["text"] = intro_text + existing_text
+
+            # Remember that we already showed the intro once
+            state.domain1_intro_shown = True
+
+        # Ensure Domain 1 blocks + micro_check shape
         response = ensure_domain1_structure(response)
 
         # C2: ensure response has stable shape

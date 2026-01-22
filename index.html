@@ -693,6 +693,7 @@ function renderBlocks(blocks) {
       block.images.forEach(img => {
         const imgEl = document.createElement('img');
         imgEl.src = img.src;
+        imgEl.src = '/static/' + img.src;
         imgEl.alt = img.alt || '';
         row.appendChild(imgEl);
       });

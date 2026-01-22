@@ -51,7 +51,6 @@ def normalize_phase_for_schema(phase: str) -> str:
 # =========================
 def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
     schema_str = json.dumps(COBRA_SCHEMA, ensure_ascii=False)
-
     system = (
         "You are operating under the COBRA protocol. "
         "You MUST output ONLY a single valid JSON object that validates against the provided schema. "
@@ -61,9 +60,19 @@ def llm_call(prompt: str, expected_domain: str, expected_phase: str) -> str:
         "DO NOT ask meta-questions about understanding the explanation. "
         "Respond ONLY to the user’s content using their language and lived examples. "
         "Do not include markdown, explanations, or code fences.\n\n"
+        "When domain is D1 (symbolic layer):\n"
+        "- Use ONLY the learner’s own symbols and interests (their shows, teams, games, characters, settings, objects).\n"
+        "- Do NOT use physics terminology, equations, or academic jargon. Keep language conversational and concrete.\n"
+        "- Stay inside their world: reuse the same kinds of symbols the controller mentions; do not introduce new media or franchises.\n\n"
+        "If the user prompt contains a section labeled exactly 'User micro-check response:',\n"
+        "treat that as the learner’s answer to a small check in Domain 1. Stay in Domain 1 when you respond:\n"
+        "- Check whether they used their own symbols.\n"
+        "- Check whether their answer makes sense in that symbolic frame.\n"
+        "- If it is off, repair using their symbols only, without theory or equations.\n\n"
         "COBRA Response Schema V1 (authoritative):\n"
         + schema_str
     )
+
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
