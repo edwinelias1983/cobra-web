@@ -31,6 +31,50 @@
         "D5"
       ]
     },
+  "payload": {
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "header",
+              "subtext",
+              "imagerow",
+              "groupedlist",
+              "instruction"
+            ]
+          },
+          "text": { "type": "string" },
+          "title": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["src"],
+              "properties": {
+                "src": { "type": "string", "minLength": 1 },
+                "alt": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+},
 
     "phase": {
       "type": "string",
@@ -143,22 +187,31 @@
         "prompt": {
           "type": "string",
           "minLength": 1
-        },
-        "expected_response_type": {
-          "type": "string",
-          "enum": [
-            "conceptual",
-            "symbolic",
-            "metaphoric",
-            "analogy",
-            "pattern",
-            "temporal",
-            "systemic",
-            "paradox"
-          ]
-        }
+      },
+      "expected_response_type": {
+        "type": "string",
+        "enum": [
+          "conceptual",
+          "symbolic",
+          "metaphoric",
+          "analogy",
+          "pattern",
+          "temporal",
+          "systemic",
+          "paradox"
+        ]
+      },
+      "required": {
+        "type": "boolean",
+        "default": false
+      },
+      "rules": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 },
+        "default": []
       }
-    },
+    }
+  },
 
     "repair_required": {
       "type": "boolean"
