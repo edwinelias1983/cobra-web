@@ -335,8 +335,7 @@ def run_cobra(payload: dict):
         # If awaiting_micro_check is set (e.g., from Domain 1), always return the same
         # micro-check payload until a micro_response is provided.
 
-        if getattr(state, "awaiting_micro_check", False) and not 
-        payload.get("micro_response"):
+        if getattr(state, "awaiting_micro_check", False) and not payload.get("micro_response"):
             response = state.last_microcheck_response
             response.setdefault("intent", "MICRO_CHECK")
             response["state"] = {
