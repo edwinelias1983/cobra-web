@@ -507,6 +507,11 @@ function renderCobraResponse(data){
     addChatMessage("system", `[${data.domain}/${data.phase}/${data.intent}] ${data.text}`);
   }
 
+  // ⬇️ NEW: render Domain‑1 (and other) visual blocks when present
+  if (data.payload && Array.isArray(data.payload.blocks)) {
+    renderBlocks(data.payload.blocks);
+  }
+
   console.log("renderCobraResponse domain/state:", data.domain, data.state);
 
   // =====================================================
@@ -530,6 +535,7 @@ function renderCobraResponse(data){
   }
   applyDomainGovernor(data);
 }
+
 
 function renderDomain1Demo() {
   const blocks = [
