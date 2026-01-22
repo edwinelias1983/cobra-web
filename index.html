@@ -688,13 +688,13 @@ function renderBlocks(blocks) {
       row.className = 'image-row';
       block.images.forEach(img => {
         const imgEl = document.createElement('img');
-        imgEl.src = img.src;
-        imgEl.src = '/static/' + img.src;
+        imgEl.src = img.src;          // single, URL‑ready src
         imgEl.alt = img.alt || '';
         row.appendChild(imgEl);
       });
       container.appendChild(row);
     }
+
 
     if (block.type === 'grouped_list') {
       const title = document.createElement('h3');

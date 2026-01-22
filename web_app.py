@@ -13,7 +13,10 @@ from app import (
     v7_domain0b_response,
     v7_record_domain0b_answer,
     v7_domain0_response,
+    v7_get_symbol_universe,
 )
+import os
+from openai import OpenAI
 
 import json
 import hashlib
@@ -24,6 +27,8 @@ from pathlib import Path
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ============================================================
 # PERSISTENT STORAGE (SQLite)
@@ -150,6 +155,169 @@ def server_symbol_universe(payload: dict, state: CobraState):
 
     return None
 
+def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 1 image generator: symbolic images from the user's symbols.
+    """
+    if response.get("domain") != "D1":
+        return response
+
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    payload = response.get("payload") or {}
+    blocks = payload.get("blocks") or []
+
+    # Avoid adding multiple image rows
+    if any(isinstance(b, dict) and b.get("type") == "image_row" for b in blocks):
+        return response
+
+    # Prefer symbols_used for this turn; fall back to full universe
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    prompt_text = (
+        "Create a simple, clean symbolic image using ONLY these elements from the learner's world: "
+        + ", ".join(focus)
+        + ". No text, no extra characters, no new franchises."
+    )
+
+    try:
+        img_resp = client.images.generate(
+            model="gpt-image-1",
+            prompt=prompt_text,
+            n=1,
+            size="1024x1024",
+        )
+        url = img_resp.data[0].url
+    except Exception:
+        # If the image API fails, keep the response unchanged
+        return response
+
+    blocks.insert(
+        0,
+        {
+            "type": "image_row",
+            "images": [
+                {
+                    "src": url,
+                    "alt": f"Symbolic visual for: {', '.join(focus)}",
+                }
+            ],
+        },
+    )
+
+    payload["blocks"] = blocks
+    response["payload"] = payload
+    return response
+
+def add_domain2_images_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 2 image generator: metaphoric scenes from the user's symbols.
+    """
+    if response.get("domain") != "D2":
+        return response
+
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    payload = response.get("payload") or {}
+    blocks = payload.get("blocks") or []
+
+    # Avoid stacking multiple image rows
+    if any(isinstance(b, dict) and b.get("type") == "image_row" for b in blocks):
+        return response
+
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    prompt_text = (
+        "Create a metaphoric scene that uses ONLY these elements from the learner's world: "
+        + ", ".join(focus)
+        + ". The scene should suggest relationships and dynamics, but must not add new shows, teams, or symbols."
+    )
+
+    try:
+        img_resp = client.images.generate(
+            model="gpt-image-1",
+            prompt=prompt_text,
+            n=1,
+            size="1024x1024",
+        )
+        url = img_resp.data[0].url
+    except Exception:
+        return response
+
+    blocks.insert(
+        0,
+        {
+            "type": "image_row",
+            "images": [
+                {
+                    "src": url,
+                    "alt": f"Metaphoric scene using: {', '.join(focus)}",
+                }
+            ],
+        },
+    )
+
+    payload["blocks"] = blocks
+    response["payload"] = payload
+    return response
+
+def add_domain3_diagram_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 3 diagram generator: simple pattern diagrams, no photos/GIFs.
+    """
+    if response.get("domain") != "D3":
+        return response
+
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    payload = response.get("payload") or {}
+    blocks = payload.get("blocks") or []
+
+    # Avoid multiple diagrams
+    if any(isinstance(b, dict) and b.get("type") == "diagram" for b in blocks):
+        return response
+
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    prompt_text = (
+        "Create a clean, minimal diagram (boxes and arrows only, no characters, no photos, no GIFs) "
+        "that shows patterns and relationships between these elements from the learner's world: "
+        + ", ".join(focus)
+        + ". White background, simple lines, high contrast."
+    )
+
+    try:
+        img_resp = client.images.generate(
+            model="gpt-image-1",
+            prompt=prompt_text,
+            n=1,
+            size="1024x1024",
+        )
+        url = img_resp.data[0].url
+    except Exception:
+        return response
+
+    blocks.insert(
+        0,
+        {
+            "type": "diagram",
+            "src": url,
+            "alt": f"Pattern diagram for: {', '.join(focus)}",
+        },
+    )
+
+    payload["blocks"] = blocks
+    response["payload"] = payload
+    return response
 
 def ensure_domain1_structure(response: dict) -> dict:
     """
@@ -164,6 +332,7 @@ def ensure_domain1_structure(response: dict) -> dict:
     blocks = payload.get("blocks") or []
 
     if not blocks:
+        # Keep your existing text structure
         blocks = [
             {
                 "type": "header",
@@ -176,6 +345,7 @@ def ensure_domain1_structure(response: dict) -> dict:
                     "No explanations yet — just anchors."
                 ),
             },
+            # TEMP: keep your current images for now
             {
                 "type": "image_row",
                 "images": [
@@ -214,6 +384,7 @@ def ensure_domain1_structure(response: dict) -> dict:
                 ),
             },
         ]
+
 
     payload["blocks"] = blocks
     response["payload"] = payload
@@ -289,7 +460,45 @@ def domain1_style_instruction() -> str:
 def root():
     with open("index.html", "r", encoding="utf-8") as f:
         return f.read()
+def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Inject a Domain 1 image_row based on the user's symbolic universe.
+    TEMP: placeholder that will later connect to a real image generator.
+    """
+    if response.get("domain") != "D1":
+        return response
 
+    payload = response.get("payload") or {}
+    blocks = payload.get("blocks") or []
+
+    # If an image_row already exists, do nothing for now
+    if any(isinstance(b, dict) and b.get("type") == "image_row" for b in blocks):
+        return response
+
+    su = getattr(state, "symbolic_universe", None)
+    label = "your symbols"
+    if isinstance(su, dict):
+        symbols = su.get("symbols") or su.get("symbol_universe") or []
+        label = ", ".join(str(x) for x in symbols) or label
+    elif isinstance(su, list):
+        label = ", ".join(str(x) for x in su) or label
+
+    blocks.insert(
+        0,
+        {
+            "type": "image_row",
+            "images": [
+                {
+                    "src": "symbol-universe-placeholder.jpg",
+                    "alt": f"Visual anchored in: {label}",
+                }
+            ],
+        },
+    )
+
+    payload["blocks"] = blocks
+    response["payload"] = payload
+    return response
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
@@ -483,7 +692,27 @@ def run_cobra(payload: dict):
             and response.get("intent") != "MICRO_CHECK"
         ):
             # Let ensure_domain1_structure create / normalize micro_check
+            # Customize Domain 1 visuals from the user's symbolic universe
+            response = add_domain1_image_row_from_symbols(response, state)
+
+            # Domain 1: inject images from the user's symbol universe
+            response = add_domain1_image_row_from_symbols(response, state)
+
+            # Ensure Domain 1 blocks + micro_check shape
             response = ensure_domain1_structure(response)
+
+            # Domain 1: inject images from the user's symbol universe
+            response = add_domain1_image_row_from_symbols(response, state)
+
+            # Ensure Domain 1 blocks + micro_check shape
+            response = ensure_domain1_structure(response)
+
+            # Domain 2: inject metaphoric images from the user's symbol universe
+            response = add_domain2_images_from_symbols(response, state)
+
+            # Domain 3: inject a simple diagram based on the user's symbols
+            response = add_domain3_diagram_from_symbols(response, state
+
             mc = response.get("micro_check") or {}
             mc.setdefault("required", True)
             mc.setdefault("rules", [
