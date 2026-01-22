@@ -127,16 +127,126 @@ def server_expected_domain(state: CobraState) -> str:
     return v7_state_domain_label(state)
 
 def server_symbol_universe(payload: dict, state: CobraState):
-    if "symbol_universe" in payload:
+    """
+    Server-owned symbolic universe:
+    - Before Domain 0 is complete: accept from payload and commit into state.
+    - After Domain 0 is complete: ignore payload and use stored state only.
+    """
+    # Before Domain 0 is complete, allow payload to set it
+    if not getattr(state, "domain0_complete", False) and "symbol_universe" in payload:
         return payload["symbol_universe"]
+
+    # After Domain 0 is complete, ignore payload and use stored state
     if isinstance(state.symbolic_universe, dict):
         return (
             state.symbolic_universe.get("symbol_universe")
             or state.symbolic_universe.get("symbols")
         )
+
     if isinstance(state.symbolic_universe, list):
         return state.symbolic_universe
+
     return None
+
+
+def ensure_domain1_structure(response: dict) -> dict:
+    """
+    Make sure Domain 1 responses have the structured payload and micro_check fields
+    that the V7 UI expects.
+    """
+    if response.get("domain") != "D1":
+        return response
+
+    payload = response.get("payload") or {}
+    blocks = payload.get("blocks") or []
+
+    if not blocks:
+        blocks = [
+            {
+                "type": "header",
+                "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)"
+            },
+            {
+                "type": "subtext",
+                "text": (
+                    "I’ll introduce only simple symbols, pulled directly from your world. "
+                    "No explanations yet — just anchors."
+                )
+            },
+            {
+                "type": "image_row",
+                "images": [
+                    {"src": "sopranos-therapy.jpg", "alt": "Sopranos therapy room"},
+                    {"src": "family-chart.png", "alt": "Family structure chart"},
+                    {"src": "barca-passing.png", "alt": "Barça passing map"},
+                ],
+            },
+            {
+                "type": "grouped_list",
+                "title": "From The Sopranos",
+                "items": [
+                    "The Family → a closed system",
+                    "Tony → central node under pressure",
+                    "Crews → semi-independent units",
+                    "Therapy room → hidden/internal layer",
+                    "Trust / betrayal → unstable alignment",
+                ],
+            },
+            {
+                "type": "grouped_list",
+                "title": "From FC Barcelona",
+                "items": [
+                    "The Ball → information / state",
+                    "Passing → interaction",
+                    "Midfield triangle → coordination under constraints",
+                    "Possession → control without force",
+                    "System > individual → structure dominates outcomes",
+                ],
+            },
+            {
+                "type": "instruction",
+                "text": (
+                    "Using only your symbols, notice: system, state, interaction, "
+                    "constraint, uncertainty, observation."
+                ),
+            },
+        ]
+
+    payload["blocks"] = blocks
+    response["payload"] = payload
+
+    micro_check = response.get("micro_check") or {}
+    micro_check.setdefault("required", True)
+    micro_check.setdefault(
+        "rules",
+        [
+            "One sentence.",
+            "Use only Sopranos or Barça language.",
+            "No science terms yet.",
+        ],
+    )
+    micro_check.setdefault(
+        "prompt",
+        'In your words: what is a "state" — without using science terms?'
+    )
+    response["micro_check"] = micro_check
+
+    return response
+
+def domain1_style_instruction() -> str:
+    """
+    Instruction text enforcing 'Domain 1 = symbols only, no theory'.
+    """
+    return (
+        "You are in DOMAIN 1 — SYMBOLIC LAYER.\n"
+        "RULES:\n"
+        "- Use ONLY simple symbols and tokens from the user's symbolic universe.\n"
+        "- NO physics terminology.\n"
+        "- NO formal theory, equations, or explanations.\n"
+        "- Describe Sopranos and Barça tokens only: family, Tony, crews, therapy room, "
+        "trust/betrayal, ball, passing, midfield triangle, possession, system > individual.\n"
+        "- Do not explain quantum physics yet; only map these tokens.\n"
+    )
 
 # ============================================================
 # ROUTES
@@ -146,6 +256,7 @@ def server_symbol_universe(payload: dict, state: CobraState):
 def root():
     with open("index.html", "r", encoding="utf-8") as f:
         return f.read()
+
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
@@ -221,15 +332,17 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
         # =====================================================
-        
-        if getattr(state, "awaiting_micro_check", False) and not payload.get("micro_response"):
-            response = state.last_microcheck_response
+        # If awaiting_micro_check is set (e.g., from Domain 1), always return the same
+        # micro-check payload until a micro_response is provided.
 
+        if getattr(state, "awaiting_micro_check", False) and not 
+        payload.get("micro_response"):
+            response = state.last_microcheck_response
+            response.setdefault("intent", "MICRO_CHECK")
             response["state"] = {
                 "domain0_complete": bool(getattr(state, "domain0_complete", False)),
                 "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
             }
-
             save_session_state(session_id, state)
             return response
 
@@ -279,6 +392,10 @@ def run_cobra(payload: dict):
         expected_phase = "PHASE_2" if getattr(state, "phase2_active", False) else "PHASE_1"
         symbol_universe = server_symbol_universe(payload, state) or []
 
+        # A2: Enforce 'Domain 1 = NO THEORY'
+        if expected_domain == Domain.D1:
+            prompt = domain1_style_instruction() + "\n\n" + prompt
+
         response = call_model_with_retry_v7(
             prompt=prompt,
             state=state,
@@ -287,6 +404,15 @@ def run_cobra(payload: dict):
             symbol_universe=symbol_universe,
             )
         log_interaction(payload, response)
+
+            # A4: Commit symbolic universe to state when Domain 0 completes
+        if not getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
+            su = payload.get("symbol_universe")
+            if su is not None:
+                state.symbolic_universe = su
+        # Assume response may mark domain0_complete; honor that
+            if response.get("state", {}).get("domain0_complete"):
+                state.domain0_complete = True
 
         # -------------------------------------------------
         # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
@@ -321,6 +447,14 @@ def run_cobra(payload: dict):
             "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
         }
 
+        response = ensure_domain1_structure(response)
+
+        # C2: ensure response has stable shape
+        response.setdefault("payload", {})
+        response.setdefault("micro_check", {})
+        response.setdefault("text", "")
+        response.setdefault("domain", server_expected_domain(state))
+        response.setdefault("intent", response.get("intent", "NORMAL"))
 
         save_session_state(session_id, state)
 
