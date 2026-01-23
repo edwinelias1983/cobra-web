@@ -202,8 +202,8 @@ def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dic
             size="1024x1024",
         )
         url = img_resp.data[0].url
-    except Exception:
-        # If the image API fails, keep the response unchanged
+    except Exception as e:
+        print("Image generation failed:", e)
         return response
 
     blocks.insert(
@@ -221,6 +221,45 @@ def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dic
 
     payload["blocks"] = blocks
     response["payload"] = payload
+    return response
+
+def add_domain1_explanation_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 1 explanation: text built from the user's symbols for this turn.
+    """
+    if response.get("domain") != "D1":
+        return response
+
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    # Prefer symbols_used this turn, fall back to full universe
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    summary = (
+        "In your symbolic universe, this step is about turning things you already know and care about "
+        f"({', '.join(focus)}) into clean visual tokens that the system can move around."
+    )
+
+    mapping = {
+        "system": (
+            "The system is the whole setup that can notice, store, and reuse these symbols from your world."
+        ),
+        "state": (
+            "The state is the current configuration of those symbols—what is active, combined, or being focused on right now."
+        ),
+        "interaction": (
+            "The interaction is how your answers change which symbols are highlighted or connected, one step at a time."
+        ),
+    }
+
+    response["symbolic_explanation"] = {
+        "summary": summary,
+        "focus_symbols": focus,
+        "mapping": mapping,
+    }
     return response
 
 def add_domain2_images_from_symbols(response: dict, state: CobraState) -> dict:
@@ -343,7 +382,7 @@ def ensure_domain1_structure(response: dict) -> dict:
     blocks = payload.get("blocks") or []
 
     if not blocks:
-        # Keep your existing text structure
+        # Keep your existing text structure (no static image_row here)
         blocks = [
             {
                 "type": "header",
@@ -355,15 +394,6 @@ def ensure_domain1_structure(response: dict) -> dict:
                     "I’ll introduce only simple symbols, pulled directly from your world. "
                     "No explanations yet — just anchors."
                 ),
-            },
-            # TEMP: keep your current images for now
-            {
-                "type": "image_row",
-                "images": [
-                    {"src": "sopranos-therapy.jpg", "alt": "Sopranos therapy room"},
-                    {"src": "family-chart.png", "alt": "Family structure chart"},
-                    {"src": "barca-passing.png", "alt": "Barça passing map"},
-                ],
             },
             {
                 "type": "grouped_list",
@@ -396,6 +426,9 @@ def ensure_domain1_structure(response: dict) -> dict:
             },
         ]
 
+    payload["blocks"] = blocks
+    response["payload"] = payload
+    return response
 
     payload["blocks"] = blocks
     response["payload"] = payload
@@ -670,12 +703,20 @@ def run_cobra(payload: dict):
             # A4: Commit symbolic universe to state when Domain 0 completes
         if not getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
             su = payload.get("symbol_universe")
-            if su is not None:
+
+            # If client didn't send a symbol_universe, derive it from likes
+            if su is None:
+                likes = payload.get("likes") or []
+                if isinstance(likes, str):
+                    likes = [likes]
+                su = likes
+
+            if su:
                 state.symbolic_universe = su
-        # Assume response may mark domain0_complete; honor that
+
+            # Assume response may mark domain0_complete; honor that
             if response.get("state", {}).get("domain0_complete"):
                 state.domain0_complete = True
-
         # -------------------------------------------------
         # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
         # -------------------------------------------------
@@ -702,26 +743,19 @@ def run_cobra(payload: dict):
             and not getattr(state, "domain1_microcheck_shown", False)
             and response.get("intent") != "MICRO_CHECK"
         ):
-            # Let ensure_domain1_structure create / normalize micro_check
-            # Customize Domain 1 visuals from the user's symbolic universe
-            response = add_domain1_image_row_from_symbols(response, state)
-
-            # Domain 1: inject images from the user's symbol universe
-            response = add_domain1_image_row_from_symbols(response, state)
-
-            # Ensure Domain 1 blocks + micro_check shape
+            # 1) Normalize Domain 1 layout + micro_check
             response = ensure_domain1_structure(response)
 
-            # Domain 1: inject images from the user's symbol universe
+            # 2) Domain 1: symbolic image from user's symbols
             response = add_domain1_image_row_from_symbols(response, state)
 
-            # Ensure Domain 1 blocks + micro_check shape
-            response = ensure_domain1_structure(response)
+            # 3) Domain 1: explanation text from user's symbols
+            response = add_domain1_explanation_from_symbols(response, state)
 
-            # Domain 2: inject metaphoric images from the user's symbol universe
+            # 4) Domain 2: metaphoric images from user's symbol universe
             response = add_domain2_images_from_symbols(response, state)
 
-            # Domain 3: inject a simple diagram based on the user's symbols
+            # 5) Domain 3: simple diagram from user's symbols
             response = add_domain3_diagram_from_symbols(response, state)
 
             mc = response.get("micro_check") or {}
