@@ -113,18 +113,19 @@ def save_session_state(session_id: str, state: CobraState):
     state_json = json.dumps(data, ensure_ascii=False)
 
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
-            VALUES (?, ?, ?)
-            ON CONFLICT(session_id)
-            DO UPDATE SET
-                state_json = excluded.state_json,
-                updated_ts = excluded.updated_ts
-            """,
-            (session_id, state_json, time.time())
-        )
-        conn.commit()
+    conn.execute(
+        """
+        INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
+        VALUES (?, ?, ?)
+        ON CONFLICT(session_id)
+        DO UPDATE SET
+            state_json = excluded.state_json,
+            updated_ts = excluded.updated_ts
+        """,
+        (session_id, state_json, time.time()),
+    )
+    conn.commit()
+
 
 # ============================================================
 # SERVER-AUTHORITATIVE DOMAIN / PHASE
