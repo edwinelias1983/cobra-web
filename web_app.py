@@ -67,20 +67,22 @@ def log_interaction(payload, response_obj):
     response_json = json.dumps(response_obj, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
-    with sqlite3.connect(DB_PATH) as conn:
-    conn.execute(
-        """
-        INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
-        VALUES (?, ?, ?)
-        ON CONFLICT(session_id)
-        DO UPDATE SET
-            state_json = excluded.state_json,
-            updated_ts = excluded.updated_ts
-        """,
-        (session_id, state_json, time.time()),
-    )
-    conn.commit()
+    session_id = str(uuid.uuid4())
+    state_json = response_json  # or whatever you actually want to store
 
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
+            VALUES (?, ?, ?)
+            ON CONFLICT(session_id)
+            DO UPDATE SET
+                state_json = excluded.state_json,
+                updated_ts = excluded.updated_ts
+            """,
+            (session_id, state_json, time.time()),
+        )
+        conn.commit()
 
 # ============================================================
 # SESSION STATE HELPERS
