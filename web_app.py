@@ -67,7 +67,8 @@ def log_interaction(payload, response_obj):
     response_json = json.dumps(response_obj, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
-    session_id = str(uuid.uuid4())
+    # Use the real session_id if present, otherwise fall back to a new one
+    session_id = payload.get("session_id") or str(uuid.uuid4())
     state_json = response_json  # or whatever you actually want to store
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -147,12 +148,19 @@ def server_expected_domain(state: CobraState) -> str:
 def server_symbol_universe(payload: dict, state: CobraState):
     """
     Server-owned symbolic universe:
-    - Before Domain 0 is complete: accept from payload and commit into state.
-    - After Domain 0 is complete: ignore payload and use stored state only.
+
+    - Before Domain 0 is complete OR when reset_symbols is true:
+      accept from payload and commit into state.
+    - Otherwise: ignore payload and use stored state only.
     """
-    # Before Domain 0 is complete, allow payload to set it
-    if not getattr(state, "domain0_complete", False) and "symbol_universe" in payload:
-        return payload["symbol_universe"]
+    reset_symbols = bool(payload.get("reset_symbols"))
+
+    # Allow payload to (re)seed when Domain 0 not locked OR reset is requested
+    if (not getattr(state, "domain0_complete", False) or reset_symbols) \
+            and "symbol_universe" in payload:
+        su = payload["symbol_universe"]
+        state.symbolic_universe = su
+        return su
 
     # After Domain 0 is complete, ignore payload and use stored state
     if isinstance(state.symbolic_universe, dict):
@@ -160,10 +168,8 @@ def server_symbol_universe(payload: dict, state: CobraState):
             state.symbolic_universe.get("symbol_universe")
             or state.symbolic_universe.get("symbols")
         )
-
     if isinstance(state.symbolic_universe, list):
         return state.symbolic_universe
-
     return None
 
 def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dict:
@@ -428,12 +434,8 @@ def ensure_domain1_structure(response: dict) -> dict:
 
     payload["blocks"] = blocks
     response["payload"] = payload
-    return response
 
-    payload["blocks"] = blocks
-    response["payload"] = payload
-
-    # 2) NEW: append “Quantum physics — stripped…” mapping into response["text"]
+    # 2) Append “Quantum physics — stripped…” mapping into response["text"]
     text = (response.get("text") or "").strip()
     mapping_header = "Quantum physics — stripped of jargon:"
 
@@ -453,12 +455,7 @@ def ensure_domain1_structure(response: dict) -> dict:
             "We stay inside these symbols only; no physics language yet.",
         ]
         mapping_block = "\n".join(mapping_lines)
-
-        if text:
-            text = text + "\n\n" + mapping_block
-        else:
-            text = mapping_block
-
+        text = text + "\n\n" + mapping_block if text else mapping_block
         response["text"] = text
 
     # 3) Ensure Domain 1 micro-check scaffold (unchanged)
@@ -479,7 +476,6 @@ def ensure_domain1_structure(response: dict) -> dict:
     response["micro_check"] = micro_check
 
     return response
-
 
 def domain1_style_instruction() -> str:
     """
@@ -504,41 +500,6 @@ def domain1_style_instruction() -> str:
 def root():
     with open("index.html", "r", encoding="utf-8") as f:
         return f.read()
-def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dict:
-    """
-    Inject a Domain 1 image_row based on the user's symbolic universe.
-    TEMP: placeholder that will later connect to a real image generator.
-    """
-    if response.get("domain") != "D1":
-        return response
-
-    payload = response.get("payload") or {}
-    blocks = payload.get("blocks") or []
-
-    # If an image_row already exists, do nothing for now
-    if any(isinstance(b, dict) and b.get("type") == "image_row" for b in blocks):
-        return response
-
-    su = getattr(state, "symbolic_universe", None)
-    label = "your symbols"
-    if isinstance(su, dict):
-        symbols = su.get("symbols") or su.get("symbol_universe") or []
-        label = ", ".join(str(x) for x in symbols) or label
-    elif isinstance(su, list):
-        label = ", ".join(str(x) for x in su) or label
-
-    blocks.insert(
-        0,
-        {
-            "type": "image_row",
-            "images": [
-                {
-                    "src": "symbol-universe-placeholder.jpg",
-                    "alt": f"Visual anchored in: {label}",
-                }
-            ],
-        },
-    )
 
     payload["blocks"] = blocks
     response["payload"] = payload
@@ -581,6 +542,9 @@ def run_cobra(payload: dict):
 
     payload = normalized
 
+    # Optional: allow caller to explicitly reseed the symbol universe
+    reset_symbols = bool(payload.get("reset_symbols"))
+
     # V7 HARD RULE: client may never control domain or phase
     payload.pop("domain", None)
     payload.pop("phase", None)
@@ -599,6 +563,12 @@ def run_cobra(payload: dict):
         print("SESSION_ID USED:", session_id)
 
         state = load_session_state(session_id)
+
+        # If caller wants to reseed symbols, clear the old universe
+        if reset_symbols:
+            state.symbolic_universe = None
+            state.domain0_complete = False  # only if you want to re-run Domain 0
+
 
         # =====================================================
         # DOMAIN 0: Commit interaction mode ONCE (SERVER-OWNED)
