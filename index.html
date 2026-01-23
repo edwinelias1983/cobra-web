@@ -261,9 +261,13 @@ pre{
       <button class="primary" onclick="sendChat()">Send</button>
     </div>
 
+    <!-- NEW: expansion choices container (initially hidden) -->
+    <div id="expansionChoices" style="display:none; margin-top:16px;"></div>
+
     <div id="thinkingIndicator" style="display:none; margin-top:12px; opacity:.7;">
       Thinking…
     </div>
+
 
       <div id="microCheckBox" style="display:none; margin-top:16px;">
         <h3>Micro-check (Domain 1 — REQUIRED)</h3>
@@ -279,8 +283,6 @@ pre{
         <textarea id="microResponse" rows="2"></textarea>
         <button class="primary" onclick="submitMicroCheck()">Continue</button>
       </div>
-
-
 
     <div class="note" id="staticConsentNote">
       COBRA does not ask for abstract parameters.<br/>
@@ -533,8 +535,16 @@ function renderCobraResponse(data){
     unlockChatIfReady(data);
   }
   applyDomainGovernor(data);
-}
 
+  // EXPANSION INVITE UI: show/hide expansionChoices
+  const expansionBox = document.getElementById("expansionChoices");
+  if (data.intent === "EXPANSION_INVITE") {
+    showExpansionChoices();
+  } else if (expansionBox) {
+    expansionBox.style.display = "none";
+    expansionBox.innerHTML = "";
+  }
+}
 
 function renderDomain1Demo() {
   const blocks = [
@@ -718,9 +728,6 @@ function renderBlocks(blocks) {
   });
 }
 
-function submitMicroCheck() {
-  // your existing code stays here, unchanged
-}
 async function submitMicroCheck(){
   const response = document.getElementById("microResponse").value.trim();
   if (!response) return;
@@ -752,6 +759,79 @@ async function submitMicroCheck(){
 
     /* ADDED: also show error in rolling chat */
     addChatMessage("system", "ERROR: " + e.message);
+  }
+}
+
+function showExpansionChoices() {
+  const bar = document.getElementById("chatInputBar");
+  const box = document.getElementById("expansionChoices");
+  if (!bar || !box) return;
+
+  // Hide normal text input while they choose
+  bar.style.display = "none";
+
+  // Put three buttons into the expansion box
+  box.innerHTML = "";
+
+  const choices = [
+    "Go deeper into this topic",
+    "Real-world examples and uses",
+    "I want to learn something new"
+  ];
+
+  choices.forEach(label => {
+    const btn = document.createElement("button");
+    btn.className = "primary";
+    btn.style.marginRight = "8px";
+    btn.textContent = label;
+    // we will define handleExpansionTopChoice later
+    btn.onclick = () => handleExpansionTopChoice(label);
+    box.appendChild(btn);
+  });
+
+  box.style.display = "block";
+}
+
+async function handleExpansionTopChoice(label) {
+  const box = document.getElementById("expansionChoices");
+  if (!box) return;
+
+  // If they want a new topic, reuse normal chat input
+  if (label === "I want to learn something new") {
+    box.innerHTML = "Type what you want to understand next in the chat box.";
+    box.style.display = "block";
+
+    const bar = document.getElementById("chatInputBar");
+    if (bar) bar.style.display = "block";
+
+    const input = document.getElementById("chatUserInput");
+    if (input) {
+      input.placeholder = "What do you want to understand next?";
+    }
+    return;
+  }
+
+  // Otherwise send their choice as micro_response to /cobra/run
+  document.getElementById("thinkingIndicator").style.display = "block";
+  box.style.display = "none";
+
+  const payload = {
+    session_id: getSessionId(),
+    micro_response: label
+  };
+
+  try {
+    const res = await fetch("/cobra/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    renderCobraResponse(data);
+  } catch (e) {
+    addChatMessage("system", "ERROR: " + e.message);
+  } finally {
+    document.getElementById("thinkingIndicator").style.display = "none";
   }
 }
 // =====================================================

@@ -5,6 +5,7 @@ from enum import Enum
 from app import Domain
 
 from app import (
+    Domain,
     call_model_with_retry_v7,
     CobraState,
     v7_state_domain_label,
@@ -14,7 +15,13 @@ from app import (
     v7_record_domain0b_answer,
     v7_domain0_response,
     v7_get_symbol_universe,
+    v7_phase2_stress_test_required,
+    v7_phase2_stress_test_prompt,
+    v7_phase1_transfer_required,
+    v7_phase1_transfer_response,
+    v7_expansion_prompt,  
 )
+
 import os
 from openai import OpenAI
 
@@ -143,7 +150,48 @@ def save_session_state(session_id: str, state: CobraState):
 # ============================================================
 
 def server_expected_domain(state: CobraState) -> str:
-    return v7_state_domain_label(state)
+    """
+    Server-owned domain scheduler, mirroring V7:
+
+    Phase 1 (bottom-up, PHASE_1):
+        D1 → D2 → D2B → D3 → D3B → D4 → D5
+
+    Phase 2 (top-down, PHASE_2):
+        D4 → D3B → D3 → D2B → D2 → D1
+    """
+    # If Domain 0/0B not complete yet, defer to V7's own label
+    if not getattr(state, "domain0_complete", False):
+        return v7_state_domain_label(state)
+
+    # Canonical sequences (must match app.py)
+    phase1_seq = ["D1", "D2", "D2B", "D3", "D3B", "D4", "D5"]
+    phase2_seq = ["D4", "D3B", "D3", "D2B", "D2", "D1"]
+
+    # Normalize current domain to simple string
+    current = getattr(state, "current_domain", "D1")
+    if isinstance(current, Domain):
+        current = current.value
+
+    # PHASE 2: top-down inversion once phase2_active is set
+    if getattr(state, "phase2_active", False):
+        # If somehow outside sequence, start at top (D4)
+        if current not in phase2_seq:
+            return Domain.D4
+        idx = phase2_seq.index(current)
+        # Stay at D1 when sequence is exhausted
+        if idx + 1 >= len(phase2_seq):
+            return Domain.D1
+        return Domain(phase2_seq[idx + 1])
+
+    # PHASE 1: bottom-up construction (default)
+    # If somehow outside sequence, start at D1
+    if current not in phase1_seq:
+        return Domain.D1
+    idx = phase1_seq.index(current)
+    # Stay at D5 when sequence is exhausted
+    if idx + 1 >= len(phase1_seq):
+        return Domain.D5
+    return Domain(phase1_seq[idx + 1])
 
 def server_symbol_universe(payload: dict, state: CobraState):
     """
@@ -322,6 +370,39 @@ def add_domain2_images_from_symbols(response: dict, state: CobraState) -> dict:
     payload["blocks"] = blocks
     response["payload"] = payload
     return response
+def add_domain2b_explanation_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 2B — analogical structure mapping explanation,
+    built entirely from the learner's symbolic universe.
+    """
+    # Only run in Domain 2B
+    if response.get("domain") != "D2B":
+        return response
+
+    # Get the user's symbol universe from state
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    # Prefer symbols_used this turn; otherwise use all symbols
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    # Core explanation text for Domain 2B
+    summary = (
+        "Here we take one situation from your world and line it up with a new one, "
+        "so that the roles, pressures, and possible moves match across both stories. "
+        f"We stay inside your symbols ({', '.join(focus)}) while we do that mapping."
+    )
+
+    # Attach a clean, predictable field into the response
+    response["domain2b_explanation"] = {
+        "summary": summary,
+        "focus_symbols": focus,
+        "kind": "analogical_structure_mapping",
+    }
+
+    return response
 
 def add_domain3_diagram_from_symbols(response: dict, state: CobraState) -> dict:
     """
@@ -375,6 +456,102 @@ def add_domain3_diagram_from_symbols(response: dict, state: CobraState) -> dict:
     response["payload"] = payload
     return response
 
+def add_domain3b_explanation_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 3B — temporal / narrative explanation,
+    using only the learner's symbolic universe.
+    """
+    # Only run in Domain 3B
+    if response.get("domain") != "D3B":
+        return response
+
+    # Get the user's symbol universe from state
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    # Prefer symbols_used this turn; otherwise use all symbols
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    summary = (
+        "Here we tell a before-and-after story entirely inside your world, "
+        "showing how things start, what pushes them to change, and what they can turn into next. "
+        f"We track those shifts using your symbols ({', '.join(focus)})."
+    )
+
+    response["domain3b_explanation"] = {
+        "summary": summary,
+        "focus_symbols": focus,
+        "kind": "temporal_narrative",
+    }
+
+    return response
+
+def add_domain4_explanation_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 4 — systemic / constraint-based explanation,
+    using only the learner's symbolic universe.
+    """
+    # Only run in Domain 4
+    if response.get("domain") != "D4":
+        return response
+
+    # Get the user's symbol universe from state
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    # Prefer symbols_used this turn; otherwise use all symbols
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    summary = (
+        "Here we step back and talk about the whole setup in your world: "
+        "what rules, limits, and background conditions shape what can actually happen. "
+        f"We describe those constraints using your symbols ({', '.join(focus)})."
+    )
+
+    response["domain4_explanation"] = {
+        "summary": summary,
+        "focus_symbols": focus,
+        "kind": "systemic_constraints",
+    }
+
+    return response
+
+def add_domain5_explanation_from_symbols(response: dict, state: CobraState) -> dict:
+    """
+    Domain 5 — paradox / tension framing,
+    using only the learner's symbolic universe.
+    """
+    # Only run in Domain 5
+    if response.get("domain") != "D5":
+        return response
+
+    # Get the user's symbol universe from state
+    symbols = v7_get_symbol_universe(state)
+    if not symbols:
+        return response
+
+    # Prefer symbols_used this turn; otherwise use all symbols
+    used = response.get("symbols_used") or symbols
+    focus = [str(s) for s in used] or [str(s) for s in symbols]
+
+    summary = (
+        "Here we name the tensions inside your world that never fully go away—"
+        "situations where two things stay true at the same time and keep pulling on each other. "
+        f"We describe those live contradictions using your symbols ({', '.join(focus)})."
+    )
+
+    response["domain5_explanation"] = {
+        "summary": summary,
+        "focus_symbols": focus,
+        "kind": "paradox_tension",
+    }
+
+    return response
+
 def ensure_domain1_structure(response: dict) -> dict:
     """
     Make sure Domain 1 responses have the structured payload and micro_check fields
@@ -401,26 +578,12 @@ def ensure_domain1_structure(response: dict) -> dict:
                     "No explanations yet — just anchors."
                 ),
             },
-            {
+                        {
                 "type": "grouped_list",
-                "title": "From The Sopranos",
+                "title": "Your symbols",
                 "items": [
-                    "The Family → a closed system",
-                    "Tony → central node under pressure",
-                    "Crews → semi-independent units",
-                    "Therapy room → hidden/internal layer",
-                    "Trust / betrayal → unstable alignment",
-                ],
-            },
-            {
-                "type": "grouped_list",
-                "title": "From FC Barcelona",
-                "items": [
-                    "The Ball → information / state",
-                    "Passing → interaction",
-                    "Midfield triangle → coordination under constraints",
-                    "Possession → control without force",
-                    "System > individual → structure dominates outcomes",
+                    "We’ll keep using the same shows, teams, and objects you picked in Domain 0.",
+                    "Every visual and explanation here will stay inside that universe.",
                 ],
             },
             {
@@ -484,12 +647,11 @@ def domain1_style_instruction() -> str:
     return (
         "You are in DOMAIN 1 — SYMBOLIC LAYER.\n"
         "RULES:\n"
-        "- Use ONLY simple symbols and tokens from the user's symbolic universe.\n"
+        "- Use ONLY simple symbols and tokens from the learner's symbolic universe.\n"
         "- NO physics terminology.\n"
         "- NO formal theory, equations, or explanations.\n"
-        "- Describe Sopranos and Barça tokens only: family, Tony, crews, therapy room, "
-        "trust/betrayal, ball, passing, midfield triangle, possession, system > individual.\n"
-        "- Do not explain quantum physics yet; only map these tokens.\n"
+        "- Speak entirely in the learner's own shows, teams, characters, and objects.\n"
+        "- Do not explain quantum physics yet; only map and move their symbols.\n"
     )
 
 # ============================================================
@@ -499,11 +661,7 @@ def domain1_style_instruction() -> str:
 @app.get("/", response_class=HTMLResponse)
 def root():
     with open("index.html", "r", encoding="utf-8") as f:
-        return f.read()
-
-    payload["blocks"] = blocks
-    response["payload"] = payload
-    return response
+        return f.read()] = payload
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
@@ -540,6 +698,13 @@ def run_cobra(payload: dict):
     if "micro_response" in payload:
         normalized["micro_response"] = payload["micro_response"]
 
+    # NEW: Phase 2 stress-test flags
+    if "phase2_stress_test" in payload:
+        normalized["phase2_stress_test"] = payload["phase2_stress_test"]
+    if "phase2_stress_mode" in payload:
+        normalized["phase2_stress_mode"] = payload["phase2_stress_mode"]
+
+    # Use normalized payload from this point on
     payload = normalized
 
     # Optional: allow caller to explicitly reseed the symbol universe
@@ -549,6 +714,9 @@ def run_cobra(payload: dict):
     payload.pop("domain", None)
     payload.pop("phase", None)
 
+    # Phase 2 stress flags (now read from normalized)
+    phase2_stress_test = bool(payload.get("phase2_stress_test"))
+    phase2_stress_mode = payload.get("phase2_stress_mode")
 
     session_id = payload.get("session_id")  # <-- ADDED (so except can safely attach it if generated)
 
@@ -568,22 +736,6 @@ def run_cobra(payload: dict):
         if reset_symbols:
             state.symbolic_universe = None
             state.domain0_complete = False  # only if you want to re-run Domain 0
-
-
-        # =====================================================
-        # DOMAIN 0: Commit interaction mode ONCE (SERVER-OWNED)
-        # =====================================================
-        
-        if not state.interaction_mode and payload.get("interaction_mode"):
-            try:
-                state.interaction_mode = InteractionMode(payload["interaction_mode"])
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid interaction_mode: {payload['interaction_mode']}"
-                )
-            
-            print("STATE INTERACTION MODE:", state.interaction_mode)
 
         # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
@@ -616,8 +768,11 @@ def run_cobra(payload: dict):
         # ---------------------------
         # Build prompt
         # ---------------------------
-   
         prompt = payload.get("prompt", "")
+
+        # If a specific Phase 2 stress-test mode is selected, annotate the prompt
+        if phase2_stress_mode:
+            prompt = f"Phase 2 stress-test mode: {phase2_stress_mode}.\n\n{prompt}"
 
         # DOMAIN 0: inject required answers so V7 can evaluate them
         if not state.domain0_complete:
@@ -643,11 +798,45 @@ def run_cobra(payload: dict):
         ## ---------------------------
         # Call V7 engine
         # ---------------------------
+        
         expected_domain = server_expected_domain(state)
+        
+        # -------------------------------------------------
+        # PHASE 1 TRANSFER GATE (V7)
+        # -------------------------------------------------
 
-        # HARD OVERRIDE: once Domain 0 is complete, push into Domain 1
-        if getattr(state, "domain0_complete", False):
-            expected_domain = Domain.D1
+        if (
+            getattr(state, "domain0_complete", False)
+            and not getattr(state, "phase2_active", False)
+            and v7_phase1_transfer_required(state)
+            and expected_domain == Domain.D5
+        ):
+            # Surface the transfer check prompt instead of advancing
+            response = v7_phase1_transfer_response(state)
+            save_session_state(session_id, state)
+            return response
+
+        # PHASE 2 STRESS-TEST GATE (Fix #9)
+        if (
+            getattr(state, "phase2_active", False)
+            and phase2_stress_test
+            and v7_phase2_stress_test_required(state)
+            and not phase2_stress_mode
+        ):
+            response = v7_phase2_stress_test_prompt(state)
+            save_session_state(session_id, state)
+            return response
+
+        # OPTIONAL: PHASE 2 EXPANSION INVITE (V7)
+        if (
+            getattr(state, "phase2_active", False)
+            and getattr(state, "phase1_transfer_complete", False)
+            and not phase2_stress_test
+            and not payload.get("expansion_opt_out")
+        ):
+            response = v7_expansion_prompt(state)
+            save_session_state(session_id, state)
+            return response
 
         expected_phase = "PHASE_2" if getattr(state, "phase2_active", False) else "PHASE_1"
         symbol_universe = server_symbol_universe(payload, state) or []
@@ -664,13 +853,22 @@ def run_cobra(payload: dict):
             symbol_universe=symbol_universe,
         )
 
+        # PHASE 1 TRANSFER COMPLETION (simple heuristic)
+        if (
+            response.get("domain") == "D5"
+            and response.get("stability_assessment") == "STABLE"
+            and response.get("intent") == "TRANSFER_CHECK"
+            and not getattr(state, "phase1_transfer_complete", False)
+        ):
+            state.phase1_transfer_complete = True
+
         # If server expects D1 but model still said D0, coerce to D1
         if getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
             response["domain"] = "D1"
 
         log_interaction(payload, response)
 
-            # A4: Commit symbolic universe to state when Domain 0 completes
+        # A4: Commit symbolic universe to state when Domain 0 completes
         if not getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
             su = payload.get("symbol_universe")
 
@@ -745,6 +943,32 @@ def run_cobra(payload: dict):
             state.domain1_microcheck_shown = True
             state.last_microcheck_response = response
             state.awaiting_micro_check = True
+        # =====================================================
+        # Always enrich D1/D2/D3 with symbol-based visuals/text
+        # =====================================================
+        dom = response.get("domain")
+
+        if dom == "D1":
+            response = add_domain1_image_row_from_symbols(response, state)
+            response = add_domain1_explanation_from_symbols(response, state)
+
+        elif dom == "D2":
+            response = add_domain2_images_from_symbols(response, state)
+
+        elif dom == "D2B":
+            response = add_domain2b_explanation_from_symbols(response, state)
+
+        elif dom == "D3":
+            response = add_domain3_diagram_from_symbols(response, state)
+        
+        elif dom == "D3B":
+            response = add_domain3b_explanation_from_symbols(response, state)
+        
+        elif dom == "D4":
+            response = add_domain4_explanation_from_symbols(response, state)
+        
+        elif dom == "D5":
+            response = add_domain5_explanation_from_symbols(response, state)
 
         # =====================================================
         # V7 MICRO-CHECK ARMING (SERVER-OWNED)
@@ -760,6 +984,9 @@ def run_cobra(payload: dict):
         response["state"] = {
             "domain0_complete": bool(getattr(state, "domain0_complete", False)),
             "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
+            "phase2_active": bool(getattr(state, "phase2_active", False)),
+            "phase2_stress_test": bool(payload.get("phase2_stress_test")),
+            "phase2_stress_mode": payload.get("phase2_stress_mode"),
         }
 
         # -------------------------------------------------
@@ -808,10 +1035,6 @@ def run_cobra(payload: dict):
         response.setdefault("intent", response.get("intent", "NORMAL"))
 
         save_session_state(session_id, state)
-
-        print("\n=== SERVER RESPONSE START ===")
-        print(json.dumps(response, indent=2, ensure_ascii=False))
-        print("=== SERVER RESPONSE END ===\n")
 
         return response
 

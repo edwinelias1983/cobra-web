@@ -46,11 +46,11 @@
             "enum": [
               "header",
               "subtext",
-              "imagerow",
-              "groupedlist",
+              "image_row",
+              "grouped_list",
               "instruction"
-            ]
-          },
+          ]
+        },
           "text": { "type": "string" },
           "title": { "type": "string" },
           "items": {
@@ -82,7 +82,7 @@
         "PHASE_1",
         "PHASE_2"
       ],
-      "$comment": "UI NOTE: Your index.html expects PHASE_1/PHASE_2 elsewhere; this schema currently enforces PHASE1/PHASE_2."
+      "$comment": "Schema and server both enforce PHASE_1 / PHASE_2; app.py normalizes PHASE1/PHASE2 into these tokens."
     },
 
     "intent": {
@@ -307,21 +307,16 @@
       "type": "object",
       "additionalProperties": true
     },
-
-    "state": {
+        "state": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "required": [
         "domain0_complete",
         "domain0b_complete"
       ],
       "properties": {
-        "domain0_complete": {
-          "type": "boolean"
-        },
-        "domain0b_complete": {
-          "type": "boolean"
-        }
+        "domain0_complete": { "type": "boolean" },
+        "domain0b_complete": { "type": "boolean" }
       }
     }
   },

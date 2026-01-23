@@ -39,13 +39,6 @@ Hard Rules:
 8) Return ONLY the corrected JSON object now.
 """
 
-def normalize_phase_for_schema(phase: str) -> str:
-    if phase == "PHASE1":
-        return "PHASE_1"
-    if phase == "PHASE2":
-        return "PHASE_2"
-    return phase
-
 # =========================
 # LLM CALL (JSON GUARDED)
 # =========================
@@ -177,7 +170,9 @@ class Domain(str, Enum):
     D0B = "D0B"
     D1  = "D1"
     D2  = "D2"
+    D2B = "D2B"
     D3  = "D3"
+    D3B = "D3B"
     D4  = "D4"
     D5  = "D5"
 
@@ -637,6 +632,14 @@ def call_model_with_retry_v7(
     v7_apply_interaction_mode_constraints(state, parsed)
     _assert_no_lmp_mutation(state, _before)
 
+    # Stamina gate: offer only after a stable, non-D0 turn
+    if (
+        expected_domain not in ("D0", "D0B")
+        and parsed.get("stability_assessment") == "STABLE"
+        and maybe_offer_stamina_gate(state)
+    ):
+        return v7_stamina_gate_response(state)
+
     return parsed
 
 # ============================================================
@@ -950,6 +953,37 @@ def v7_phase2_stress_test_prompt(state: CobraState) -> dict:
     }
 
 # ============================================================
+# V7 OPTIONAL: INTERCONNECTION / EXPANSION PROMPT
+# ============================================================
+
+def v7_expansion_prompt(state: CobraState) -> dict:
+    """
+    Optional, post-completion expansion prompt.
+    Purpose: invite cross-domain / interconnection exploration
+    without changing core domain/phase logic.
+    """
+    return {
+        "domain": v7_state_domain_label(state),
+        "phase": "PHASE_2",
+        "intent": "EXPANSION_INVITE",
+        "introduced_new_symbols": False,
+        "repair_required": False,
+        "stability_assessment": "STABLE",
+        "text": (
+            "If you want, we can expand a bit:\n\n"
+            "• See how this connects to other disciplines or theories.\n"
+            "• See where this shows up in other contexts or applications.\n"
+            "• See an example where this idea was used outside its original purpose.\n\n"
+            "Choose ONE direction, and we will stay grounded in your symbols."
+        ),
+        "micro_check": {
+            "prompt": "Pick one expansion direction, or say you want to stay here.",
+            "expected_response_type": "conceptual",
+        },
+        "media_suggestions": [],
+    }
+
+# ============================================================
 # V7 REQUIRED: INTERACTION MODE BEHAVIOR ENFORCEMENT
 # ============================================================
 
@@ -984,4 +1018,7 @@ def v7_apply_interaction_mode_constraints(
         if parsed_response.get("stability_assessment") != "STABLE":
             parsed_response["repair_required"] = True
             parsed_response["advance_allowed"] = False
+
+callmodelwithretryv7 = call_model_with_retry_v7
+v7statedomainlabel = v7_state_domain_label
 
