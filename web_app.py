@@ -33,7 +33,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 @app.get("/health")
 def health():
     return {"status": "ok"}
-    
+
 # ============================================================
 # PERSISTENT STORAGE (SQLite)
 # ============================================================
@@ -68,14 +68,19 @@ def log_interaction(payload, response_obj):
     payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO interactions (ts, payload_hash, payload, response)
-            VALUES (?, ?, ?, ?)
-            """,
-            (time.time(), payload_hash, payload_json, response_json)
-        )
-        conn.commit()
+    conn.execute(
+        """
+        INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
+        VALUES (?, ?, ?)
+        ON CONFLICT(session_id)
+        DO UPDATE SET
+            state_json = excluded.state_json,
+            updated_ts = excluded.updated_ts
+        """,
+        (session_id, state_json, time.time()),
+    )
+    conn.commit()
+
 
 # ============================================================
 # SESSION STATE HELPERS
@@ -716,7 +721,7 @@ def run_cobra(payload: dict):
             response = add_domain2_images_from_symbols(response, state)
 
             # Domain 3: inject a simple diagram based on the user's symbols
-            response = add_domain3_diagram_from_symbols(response, state
+            response = add_domain3_diagram_from_symbols(response, state)
 
             mc = response.get("micro_check") or {}
             mc.setdefault("required", True)
