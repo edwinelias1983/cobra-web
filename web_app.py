@@ -741,7 +741,7 @@ def run_cobra(payload: dict):
             getattr(state, "domain0_complete", False)
             and response.get("domain") == "D1"
             and not getattr(state, "domain1_microcheck_shown", False)
-            and response.get("intent") != "MICRO_CHECK"
+            # allow images during the first D1 micro-check
         ):
             # 1) Normalize Domain 1 layout + micro_check
             response = ensure_domain1_structure(response)
@@ -822,8 +822,7 @@ def run_cobra(payload: dict):
             ]
 
             intro_text = "\n".join(intro_lines)
-            existing_text = response.get("text") or ""
-            response["text"] = intro_text + existing_text
+            response["text"] = intro_text
 
             # Remember that we already showed the intro once
             state.domain1_intro_shown = True
