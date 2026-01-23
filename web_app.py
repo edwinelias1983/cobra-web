@@ -840,7 +840,10 @@ def run_cobra(payload: dict):
 
         save_session_state(session_id, state)
 
-        print("D1_DEBUG_RESPONSE", json.dumps(response, ensure_ascii=False)[:2000])
+        print("\n=== SERVER RESPONSE START ===")
+        print(json.dumps(response, indent=2, ensure_ascii=False))
+        print("=== SERVER RESPONSE END ===\n")
+
         return response
 
     except Exception as e:
