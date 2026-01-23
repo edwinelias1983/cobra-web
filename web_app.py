@@ -30,6 +30,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+    
 # ============================================================
 # PERSISTENT STORAGE (SQLite)
 # ============================================================
