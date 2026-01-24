@@ -1135,6 +1135,8 @@ def run_cobra(payload: dict):
             "phase2_stress_mode": payload.get("phase2_stress_mode"),
         }
 
+        intro_lines = []
+
         # -------------------------------------------------
         # NEW: Domain 1 intro preface on first D1 turn
         # -------------------------------------------------
@@ -1171,7 +1173,7 @@ def run_cobra(payload: dict):
 
         if intro_lines:
             response["text"] = "\n".join(intro_lines)
-            
+
         # Mark intro as shown regardless, so it never fires again
         state.domain1_intro_shown = True
 
