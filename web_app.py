@@ -639,7 +639,6 @@ def ensure_domain1_structure(response: dict) -> dict:
     blocks = payload.get("blocks")
 
     if blocks is None:
-    # Keep existing structure, but do NOT assume shows / teams / franchises
     blocks = [
         {
             "type": "header",
