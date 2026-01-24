@@ -373,11 +373,28 @@ def v7_get_symbol_universe(state: CobraState) -> list:
 
 def v7_enforce_introduced_symbols(parsed: dict):
     """
-    introduced_new_symbols must be false unless explicitly allowed upstream.
-    Schema allows boolean; V7 enforcement rejects True.
+    V7 rule:
+    - Symbols are declared, not inferred.
+    - Semantic categories (e.g., 'characters', 'games') are NOT symbols.
     """
+
+    # Explicit upstream allowance is still respected
     if parsed.get("introduced_new_symbols") is True:
-        raise RuntimeError("[V7 VIOLATION] introduced_new_symbols must be false (unless explicitly allowed)")
+        raise RuntimeError(
+            "[V7 VIOLATION] introduced_new_symbols must be false (unless explicitly allowed)"
+        )
+
+    symbols_used = parsed.get("symbols_used")
+
+    if isinstance(symbols_used, list):
+        for s in symbols_used:
+            if not isinstance(s, str):
+                continue
+            # Disallow semantic-category leakage (structural, not heuristic)
+            if s.islower():
+                raise RuntimeError(
+                    f"[V7 VIOLATION] inferred semantic category '{s}' is not a valid symbol"
+                )
 
 def v7_enforce_microcheck_type(parsed: dict, expected_domain: str):
     # V7 RULE: Domain 0 has NO micro-check type enforcement
@@ -698,6 +715,11 @@ def call_model_with_retry_v7(
     ):
         return v7_stamina_gate_response(state)
 
+    # --- V7 FINAL SYMBOL AUTHORITY LOCK (FIX #2) ---
+    if isinstance(parsed, dict):
+        if isinstance(symbol_universe, list):
+            parsed["symbols_used"] = symbol_universe.copy()
+            
     return parsed
 
 # ============================================================
