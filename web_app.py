@@ -636,9 +636,9 @@ def ensure_domain1_structure(response: dict) -> dict:
     # 1) Ensure DOMAIN 1 symbolic visual block (what you already had)
     payload = response.get("payload") or {}
 
-    blocks = payload.get("blocks")
+blocks = payload.get("blocks")
 
-    if blocks is None:
+if blocks is None:
     blocks = [
         {
             "type": "header",
