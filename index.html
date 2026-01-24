@@ -327,9 +327,12 @@ function unlockChatIfReady(data){
     data &&
     data.state &&
     data.state.domain0_complete === true &&
-    data.intent !== "MICRO_CHECK"
-  ) {
-
+    data.intent !== "MICRO_CHECK" &&
+    (
+      (typeof data.text === "string" && data.text.trim()) ||
+      (data.payload && Array.isArray(data.payload.blocks) && data.payload.blocks.length > 0)
+    )
+  )
     cobraInitialized = true;
 
     chat.style.display = "block";
@@ -349,9 +352,7 @@ function unlockChatIfReady(data){
       });
     }
   }
-}
-
-
+  
 function addChatMessage(role, text){
   if (!cobraInitialized) {
     role = "system";
@@ -509,6 +510,8 @@ function renderCobraResponse(data){
   }
 
   // ⬇️ NEW: render Domain‑1 (and other) visual blocks when present
+  console.log("DOMAIN BLOCKS:", data.payload?.blocks);
+  
   if (data.payload && Array.isArray(data.payload.blocks)) {
     renderBlocks(data.payload.blocks);
   }
@@ -611,15 +614,14 @@ async function begin(){
       "system",
       "Domain 0 incomplete. You must answer both questions and select an interaction mode."
     );
+    return; // 🔴 REQUIRED
   }
-
 
    console.log("PROBE B"); 
 
   // Hide static instructional note as soon as COBRA begins
   const staticNote = document.getElementById("staticSymbolNote");
   if (staticNote) staticNote.style.display = "none";
-
 
   document.getElementById("thinkingIndicator").style.display = "block";
 
