@@ -626,6 +626,11 @@ def add_domain5_explanation_from_symbols(response: dict, state: CobraState) -> d
     return response
 
 def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
+
+    # CHANGE 3: Do not mutate Domain-1 once symbolic blocks are locked
+    if response.get("_symbolic_blocks_locked"):
+        return response
+
     """
     Make sure Domain 1 responses have the structured payload and micro_check fields
     that the V7 UI expects, and inject the Domain 1 mapping text.
@@ -637,8 +642,8 @@ def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
     payload = response.get("payload") or {}
     blocks = payload.get("blocks")
 
-    if blocks is None:
-        blocks = [
+    if not blocks:
+        payload["blocks"] = DEFAULT_DOMAIN1_BLOCKS
             {
                 "type": "header",
                 "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)",
@@ -1094,6 +1099,9 @@ def run_cobra(payload: dict):
             response = add_domain1_image_row_from_symbols(response, state)
             response = add_domain1_explanation_from_symbols(response, state)
 
+        if response.get("domain") == "D1":
+            response["_symbolic_blocks_locked"] = True
+
         elif dom == "D2":
             response = add_domain2_images_from_symbols(response, state)
 
@@ -1136,38 +1144,39 @@ def run_cobra(payload: dict):
         # -------------------------------------------------
         if (
             response.get("domain") == "D1"
-            and not getattr(state, "phase2_active", False)  # still in PHASE_1
             and not getattr(state, "domain1_intro_shown", False)
         ):
-            # Build the intro from state
-            symbolic_universe_label = " + ".join(
-                getattr(state, "symbol_universe_labels", [])
-            ) if getattr(state, "symbol_universe_labels", None) else "your symbols"
+            # Determine whether Domain-1 content already exists
+            has_blocks = bool(response.get("payload", {}).get("blocks"))
+            has_text = bool((response.get("text") or "").strip())
 
-            mode = getattr(state, "interaction_mode", None)
-            mode_label = (
-                mode.value.capitalize()
-                if hasattr(mode, "value")
-                else str(mode) if mode else "Unknown"
-            )
+        # Only inject intro text if NOTHING meaningful exists yet
+            if not has_blocks and not has_text:
 
-            intro_lines = [
-                "Good. Domain 0 is now locked.",
-                f"Symbolic universe = {symbolic_universe_label}",
-                f"Mode = {mode_label}",
-                "",
-                "We move bottom-up.",
-                "",
-            ]
+                symbolic_universe_label = " + ".join(
+                    getattr(state, "symbol_universe_labels", [])
+                 ) if getattr(state, "symbol_universe_labels", None) else "your symbols"
 
-            intro_text = "\n".join(intro_lines)
-            response["text"] = intro_text
+                mode = getattr(state, "interaction_mode", None)
+                mode_label = (
+                    mode.value.capitalize()
+                    if hasattr(mode, "value")
+                    else str(mode) if mode else "Unknown"
+                )
 
-            # Remember that we already showed the intro once
-            state.domain1_intro_shown = True
+                intro_lines = [
+                    "Domain 1 initialized.",
+                    f"Symbolic universe = {symbolic_universe_label}",
+                    f"Mode = {mode_label}",
+                    "",
+                    "We move bottom-up.",
+                     "",
+                ]
 
-        # Ensure Domain 1 blocks + micro_check shape
-        response = ensure_domain1_structure(response, state)
+            response["text"] = "\n".join(intro_lines)
+
+        # Mark intro as shown regardless, so it never fires again
+        state.domain1_intro_shown = True
 
         # C2: ensure response has stable shape
         response.setdefault("payload", {})
@@ -1193,5 +1202,4 @@ def run_cobra(payload: dict):
             "text": f"Internal Server Error: {str(e)}"
         }
 
-# FORCE_COMMIT
-# FORCE_COMMIT
+
