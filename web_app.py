@@ -857,6 +857,24 @@ def run_cobra(payload: dict):
             state.domain0_complete = False  # only if you want to re-run Domain 0
 
         # =====================================================
+        # V7 HARD GATE — MICRO-CHECK REQUIRES SYMBOL UNIVERSE
+        # =====================================================
+        if payload.get("micro_response"):
+            if not getattr(state, "symbolic_universe", None) or len(state.symbolic_universe) == 0:
+                return {
+                    "domain": "D0",
+                    "intent": "REPAIR",
+                    "text": "Symbol universe is empty. Domain 0 must be completed before micro-check.",
+                    "repair_required": True,
+                    "symbols_used": [],
+                    "symbol_universe": [],
+                    "state": {
+                        "domain0_complete": False,
+                        "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
+                },
+            }
+
+        # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
         # =====================================================
         # If awaiting_micro_check is set (e.g., from Domain 1), always return the same
