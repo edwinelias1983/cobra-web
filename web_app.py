@@ -625,7 +625,7 @@ def add_domain5_explanation_from_symbols(response: dict, state: CobraState) -> d
 
     return response
 
-def ensure_domain1_structure(response: dict) -> dict:
+def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
     """
     Make sure Domain 1 responses have the structured payload and micro_check fields
     that the V7 UI expects, and inject the Domain 1 mapping text.
@@ -635,41 +635,40 @@ def ensure_domain1_structure(response: dict) -> dict:
 
     # 1) Ensure DOMAIN 1 symbolic visual block (what you already had)
     payload = response.get("payload") or {}
+    blocks = payload.get("blocks")
 
-blocks = payload.get("blocks")
+    if blocks is None:
+        blocks = [
+            {
+                "type": "header",
+                "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)",
+            },
+            {
+                "type": "subtext",
+                "text": (
+                    "I’ll introduce only simple symbols, pulled directly from your world. "
+                    "No explanations yet — just anchors."
+                ),
+            },
+            {
+                "type": "grouped_list",
+                "title": "Your symbols",
+                "items": [
+                    "We’ll keep using only the symbols you named in Domain 0.",
+                    "Every visual and explanation will stay inside that symbolic universe.",
+                ],
+            },
+            {
+                "type": "instruction",
+                "text": (
+                    "Using only your symbols, notice how things are arranged, "
+                    "what can change, and what limits those changes."
+                ),
+            },
+        ]
 
-if blocks is None:
-    blocks = [
-        {
-            "type": "header",
-            "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)",
-        },
-        {
-            "type": "subtext",
-            "text": (
-                "I’ll introduce only simple symbols, pulled directly from your world. "
-                "No explanations yet — just anchors."
-            ),
-        },
-        {
-            "type": "grouped_list",
-            "title": "Your symbols",
-            "items": [
-                "We’ll keep using only the symbols you named in Domain 0.",
-                "Every visual and explanation will stay inside that symbolic universe.",
-            ],
-        },
-        {
-            "type": "instruction",
-            "text": (
-                "Using only your symbols, notice how things are arranged, "
-                "what can change, and what limits those changes."
-            ),
-        },
-    ]
-
-    payload["blocks"] = blocks
-    response["payload"] = payload
+        payload["blocks"] = blocks
+        response["payload"] = payload
 
     # 2) Append “Quantum physics — stripped…” mapping into response["text"]
     text = (response.get("text") or "").strip()
@@ -697,6 +696,10 @@ if blocks is None:
         mapping_block = "\n".join(mapping_lines)
         text = text + "\n\n" + mapping_block if text else mapping_block
         response["text"] = text
+    else:
+        # If the mapping is already there, still derive symbol_label for rules
+        symbols = v7_get_symbol_universe(state) or ["your world"]
+        symbol_label = ", ".join(symbols)
 
     # 3) Ensure Domain 1 micro-check scaffold (unchanged)
     micro_check = response.get("micro_check") or {}
@@ -1048,7 +1051,7 @@ def run_cobra(payload: dict):
             # allow images during the first D1 micro-check
         ):
             # 1) Normalize Domain 1 layout + micro_check
-            response = ensure_domain1_structure(response)
+            response = ensure_domain1_structure(response, state)
 
             # 2) Domain 1: symbolic image from user's symbols
             response = add_domain1_image_row_from_symbols(response, state)
@@ -1164,7 +1167,7 @@ def run_cobra(payload: dict):
             state.domain1_intro_shown = True
 
         # Ensure Domain 1 blocks + micro_check shape
-        response = ensure_domain1_structure(response)
+        response = ensure_domain1_structure(response, state)
 
         # C2: ensure response has stable shape
         response.setdefault("payload", {})
