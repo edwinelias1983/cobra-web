@@ -30,6 +30,7 @@ import hashlib
 import time
 import sqlite3
 import uuid
+import copy
 from pathlib import Path
 
 app = FastAPI()
@@ -1092,7 +1093,7 @@ def run_cobra(payload: dict):
 
             response["intent"] = "MICRO_CHECK"
             state.domain1_microcheck_shown = True
-            state.last_microcheck_response = response
+            state.last_microcheck_response = copy.deepcopy(response)
             state.awaiting_micro_check = True
         # =====================================================
         # Always enrich D1/D2/D3 with symbol-based visuals/text
@@ -1129,7 +1130,7 @@ def run_cobra(payload: dict):
         # =====================================================
         
         if response.get("intent") == "MICRO_CHECK":
-            state.last_microcheck_response = response
+            state.last_microcheck_response = copy.deepcopy(response)
             state.awaiting_micro_check = True
         
         # -------------------------------------------------
