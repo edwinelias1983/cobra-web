@@ -75,21 +75,15 @@ def log_interaction(payload, response_obj):
     response_json = json.dumps(response_obj, ensure_ascii=False)
     payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
-    # Use the real session_id if present, otherwise fall back to a new one
     session_id = payload.get("session_id") or str(uuid.uuid4())
-    state_json = response_json  # or whatever you actually want to store
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
-            INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
-            VALUES (?, ?, ?)
-            ON CONFLICT(session_id)
-            DO UPDATE SET
-                state_json = excluded.state_json,
-                updated_ts = excluded.updated_ts
+            INSERT INTO interactions (ts, payload_hash, payload, response)
+            VALUES (?, ?, ?, ?)
             """,
-            (session_id, state_json, time.time()),
+            (time.time(), payload_hash, payload_json, response_json),
         )
         conn.commit()
 
@@ -1030,24 +1024,7 @@ def run_cobra(payload: dict):
             state.phase1_transfer_complete = True
 
         # If server expects D1 but model still said D0, coerce to D1
-        if getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
-            response["domain"] = "D1"
-
         log_interaction(payload, response)
-
-        # A4: Commit symbolic universe to state when Domain 0 completes
-        if not getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
-            su = payload.get("symbol_universe")
-
-            # If client didn't send a symbol_universe, derive it from likes
-            if su is None:
-                likes = payload.get("likes") or []
-                if isinstance(likes, str):
-                    likes = [likes]
-                su = likes
-
-            if su:
-                state.symbolic_universe = su
 
         # -------------------------------------------------
         # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
@@ -1201,12 +1178,13 @@ def run_cobra(payload: dict):
         # Mark intro as shown regardless, so it never fires again
         state.domain1_intro_shown = True
 
-        # C2: ensure response has stable shape
+        # C2: ensure response has stable shape (NO DOMAIN MUTATION)
         response.setdefault("payload", {})
         response.setdefault("micro_check", {})
         response.setdefault("text", "")
-        response.setdefault("domain", server_expected_domain(state))
-        response.setdefault("intent", response.get("intent", "NORMAL"))
+
+        if "intent" not in response:
+            response["intent"] = "NORMAL"
 
         # HARD CLEANUP
         payload = response.get("payload") or {}
