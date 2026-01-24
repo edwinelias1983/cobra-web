@@ -271,13 +271,11 @@ pre{
 
       <div id="microCheckBox" style="display:none; margin-top:16px;">
         <h3>Micro-check (Domain 1 — REQUIRED)</h3>
-        <p>Answer in one sentence, using only Sopranos or Barça language.</p>
-        <p><em>In your words: what is a “state” — without using science terms?</em></p>
-        <p style="font-size: 0.9em; opacity: 0.8;">
-          Example structure — don’t copy: “A state is like ______ when ______.”
+        <p id="microPrompt">
+          Answer in one sentence, using only your own symbols.
         </p>
         <p style="font-size: 0.9em; opacity: 0.8;">
-          We stay in Domain 1 until this is stable.
+          Example structure — don’t copy: “A state is like ______ when ______.”
         </p>
         <label>Your response</label>
         <textarea id="microResponse" rows="2"></textarea>
@@ -332,7 +330,7 @@ function unlockChatIfReady(data){
       (typeof data.text === "string" && data.text.trim()) ||
       (data.payload && Array.isArray(data.payload.blocks) && data.payload.blocks.length > 0)
     )
-  )
+  ) {
     cobraInitialized = true;
 
     chat.style.display = "block";
@@ -352,7 +350,8 @@ function unlockChatIfReady(data){
       });
     }
   }
-  
+}
+
 function addChatMessage(role, text){
   if (!cobraInitialized) {
     role = "system";
@@ -511,7 +510,7 @@ function renderCobraResponse(data){
 
   // ⬇️ NEW: render Domain‑1 (and other) visual blocks when present
   console.log("DOMAIN BLOCKS:", data.payload?.blocks);
-  
+
   if (data.payload && Array.isArray(data.payload.blocks)) {
     renderBlocks(data.payload.blocks);
   }
@@ -546,57 +545,6 @@ function renderCobraResponse(data){
   } else if (expansionBox) {
     expansionBox.style.display = "none";
     expansionBox.innerHTML = "";
-  }
-}
-
-function renderDomain1Demo() {
-  const blocks = [
-    {
-      type: 'header',
-      text: 'DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)'
-    },
-    {
-      type: 'subtext',
-      text: 'I’ll introduce only simple symbols, pulled directly from your world. No explanations yet — just anchors.'
-    },
-    {
-      type: 'image_row',
-      images: [
-        { src: 'sopranos-therapy.jpg', alt: 'Sopranos therapy room' },
-        { src: 'family-chart.png', alt: 'Family structure chart' },
-        { src: 'barca-passing.png', alt: 'Barça passing map' }
-      ]
-    },
-    {
-      type: 'grouped_list',
-      title: 'From The Sopranos',
-      items: [
-        'The Family → a closed system',
-        'Tony → central node under pressure',
-        'Crews → semi-independent units',
-        'Therapy room → hidden/internal layer',
-        'Trust / betrayal → unstable alignment'
-      ]
-    },
-    {
-      type: 'grouped_list',
-      title: 'From FC Barcelona',
-      items: [
-        'The Ball → information / state',
-        'Passing → interaction',
-        'Midfield triangle → coordination under constraints',
-        'Possession → control without force',
-        'System > individual → structure dominates outcomes'
-      ]
-    },
-    {
-      type: 'instruction',
-      text: 'Using only your symbols, notice: system, state, interaction, constraint, uncertainty, observation.'
-    }
-  ];
-
-  if (typeof renderBlocks === 'function') {
-    renderBlocks(blocks);
   }
 }
 
