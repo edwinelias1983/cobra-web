@@ -993,6 +993,14 @@ def run_cobra(payload: dict):
 
         response = enforce_symbol_scope(response, state)
 
+        # =====================================================
+        # V7 GUARANTEE — symbols_used must never be empty
+        # =====================================================
+        symbols = v7_get_symbol_universe(state)
+        if isinstance(symbols, list) and symbols:
+            if not response.get("symbols_used"):
+                response["symbols_used"] = symbols
+
         # PHASE 1 TRANSFER COMPLETION (simple heuristic)
         if (
             response.get("domain") == "D5"
@@ -1190,6 +1198,13 @@ def run_cobra(payload: dict):
         if isinstance(blocks, list):
             payload["blocks"] = remove_placeholder_images(blocks)
             response["payload"] = payload
+
+        # =====================================================
+        # V7 UI CONTRACT — SURFACE SYMBOL UNIVERSE (AUTHORITATIVE)
+        # =====================================================
+        symbols = v7_get_symbol_universe(state)
+        if isinstance(symbols, list):
+            response["symbol_universe"] = symbols
 
         save_session_state(session_id, state)
         return response
