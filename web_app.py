@@ -638,12 +638,12 @@ def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
     if response.get("domain") != "D1":
         return response
 
-    # 1) Ensure DOMAIN 1 symbolic visual block (what you already had)
+    # 1) Ensure DOMAIN 1 symbolic visual block
     payload = response.get("payload") or {}
     blocks = payload.get("blocks")
 
     if not blocks:
-        payload["blocks"] = DEFAULT_DOMAIN1_BLOCKS
+        payload["blocks"] = [
             {
                 "type": "header",
                 "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)",
@@ -672,14 +672,12 @@ def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
             },
         ]
 
-        payload["blocks"] = blocks
         response["payload"] = payload
 
-    # 2) Append “Quantum physics — stripped…” mapping into response["text"]
+    # 2) Append symbolic mapping into response["text"]
     text = (response.get("text") or "").strip()
     mapping_header = "Quantum physics — stripped of jargon:"
 
-    # Avoid duplicating the mapping if the model ever echoes it
     if mapping_header not in text:
         symbols = v7_get_symbol_universe(state) or ["your world"]
         symbol_label = ", ".join(symbols)
@@ -699,14 +697,12 @@ def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
         ]
 
         mapping_block = "\n".join(mapping_lines)
-        text = text + "\n\n" + mapping_block if text else mapping_block
-        response["text"] = text
+        response["text"] = text + "\n\n" + mapping_block if text else mapping_block
     else:
-        # If the mapping is already there, still derive symbol_label for rules
         symbols = v7_get_symbol_universe(state) or ["your world"]
         symbol_label = ", ".join(symbols)
 
-    # 3) Ensure Domain 1 micro-check scaffold (unchanged)
+    # 3) Ensure Domain 1 micro-check scaffold
     micro_check = response.get("micro_check") or {}
     micro_check.setdefault("required", True)
     micro_check.setdefault(
@@ -719,7 +715,7 @@ def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
     )
     micro_check.setdefault(
         "prompt",
-        'Using only your symbols, describe how things are set up right now.'
+        "Using only your symbols, describe how things are set up right now."
     )
     response["micro_check"] = micro_check
 
