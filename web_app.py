@@ -1192,6 +1192,8 @@ def run_cobra(payload: dict):
         return response
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return {
             "domain": "SERVER_ERROR",
             "intent": "ERROR",
