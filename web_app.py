@@ -1049,9 +1049,6 @@ def run_cobra(payload: dict):
             if su:
                 state.symbolic_universe = su
 
-            # Assume response may mark domain0_complete; honor that
-            if response.get("state", {}).get("domain0_complete"):
-                state.domain0_complete = True
         # -------------------------------------------------
         # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
         # -------------------------------------------------
