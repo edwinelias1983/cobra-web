@@ -220,6 +220,51 @@ def server_symbol_universe(payload: dict, state: CobraState):
         return state.symbolic_universe
     return None
 
+def enforce_symbol_scope(response: dict, state: CobraState) -> dict:
+    """
+    Enforce that symbols_used is a subset of the user's symbolic universe.
+    If missing, default to the full universe.
+    """
+    symbols = v7_get_symbol_universe(state) or []
+    if not symbols:
+        return response
+
+    used = response.get("symbols_used")
+
+    # If model didn't declare symbols_used, force it
+    if not used:
+        response["symbols_used"] = symbols
+        return response
+
+    # Filter to allowed symbols only
+    filtered = [s for s in used if s in symbols]
+
+    # If model tried to introduce new symbols, snap back
+    response["symbols_used"] = filtered if filtered else symbols
+    return response
+
+def remove_placeholder_images(blocks: list) -> list:
+    """
+    V7 HARD RULE:
+    No placeholder or legacy images may survive after Domain 0.
+    """
+    cleaned = []
+
+    for b in blocks:
+        if (
+            isinstance(b, dict)
+            and b.get("type") == "image_row"
+            and any(
+                img.get("src") == "symbol-universe-placeholder.jpg"
+                for img in b.get("images", [])
+            )
+        ):
+            continue  # DROP legacy placeholder image rows
+
+        cleaned.append(b)
+
+    return cleaned
+
 def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dict:
     """
     Domain 1 image generator: symbolic images from the user's symbols.
@@ -243,9 +288,16 @@ def add_domain1_image_row_from_symbols(response: dict, state: CobraState) -> dic
     focus = [str(s) for s in used] or [str(s) for s in symbols]
 
     prompt_text = (
-        "Create a simple, clean symbolic image using ONLY these elements from the learner's world: "
+        "Create a literal symbolic image with ONLY the following items:\n"
         + ", ".join(focus)
-        + ". No text, no extra characters, no new franchises."
+        + "\n\nRULES:\n"
+        "- Each symbol appears exactly once.\n"
+        "- No background scenery.\n"
+        "- No implied story or action.\n"
+        "- No extra objects, people, or context.\n"
+        "- Flat, neutral background.\n"
+        "- Diagrammatic, not artistic.\n"
+        "- Do not add meaning beyond the listed symbols."
     )
 
     try:
@@ -309,11 +361,32 @@ def add_domain1_explanation_from_symbols(response: dict, state: CobraState) -> d
         ),
     }
 
+    # Store structured explanation (internal, non-UI)
     response["symbolic_explanation"] = {
         "summary": summary,
         "focus_symbols": focus,
         "mapping": mapping,
     }
+
+    # ALSO surface explanation visibly (V7 UI contract)
+    payload = response.get("payload") or {}
+    blocks = payload.get("blocks") or []
+
+    # Avoid duplicate explanation blocks
+    if not any(
+        isinstance(b, dict) and b.get("type") == "subtext" and "Symbolic explanation:" in b.get("text", "")
+        for b in blocks
+    ):
+        blocks.append(
+            {
+                "type": "subtext",
+                "text": "Symbolic explanation:\n" + summary,
+            }
+        )
+
+    payload["blocks"] = blocks
+    response["payload"] = payload
+
     return response
 
 def add_domain2_images_from_symbols(response: dict, state: CobraState) -> dict:
@@ -562,38 +635,39 @@ def ensure_domain1_structure(response: dict) -> dict:
 
     # 1) Ensure DOMAIN 1 symbolic visual block (what you already had)
     payload = response.get("payload") or {}
-    blocks = payload.get("blocks") or []
 
-    if not blocks:
-        # Keep your existing text structure (no static image_row here)
-        blocks = [
-            {
-                "type": "header",
-                "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)",
-            },
-            {
-                "type": "subtext",
-                "text": (
-                    "I’ll introduce only simple symbols, pulled directly from your world. "
-                    "No explanations yet — just anchors."
-                ),
-            },
-                        {
-                "type": "grouped_list",
-                "title": "Your symbols",
-                "items": [
-                    "We’ll keep using the same shows, teams, and objects you picked in Domain 0.",
-                    "Every visual and explanation here will stay inside that universe.",
-                ],
-            },
-            {
-                "type": "instruction",
-                "text": (
-                    "Using only your symbols, notice: system, state, interaction, "
-                    "constraint, uncertainty, observation."
-                ),
-            },
-        ]
+    blocks = payload.get("blocks")
+
+    if blocks is None:
+    # Keep existing structure, but do NOT assume shows / teams / franchises
+    blocks = [
+        {
+            "type": "header",
+            "text": "DOMAIN 1 — SYMBOLIC (PRIMARY VISUAL LAYER)",
+        },
+        {
+            "type": "subtext",
+            "text": (
+                "I’ll introduce only simple symbols, pulled directly from your world. "
+                "No explanations yet — just anchors."
+            ),
+        },
+        {
+            "type": "grouped_list",
+            "title": "Your symbols",
+            "items": [
+                "We’ll keep using only the symbols you named in Domain 0.",
+                "Every visual and explanation will stay inside that symbolic universe.",
+            ],
+        },
+        {
+            "type": "instruction",
+            "text": (
+                "Using only your symbols, notice how things are arranged, "
+                "what can change, and what limits those changes."
+            ),
+        },
+    ]
 
     payload["blocks"] = blocks
     response["payload"] = payload
@@ -604,19 +678,23 @@ def ensure_domain1_structure(response: dict) -> dict:
 
     # Avoid duplicating the mapping if the model ever echoes it
     if mapping_header not in text:
+        symbols = v7_get_symbol_universe(state) or ["your world"]
+        symbol_label = ", ".join(symbols)
+
         mapping_lines = [
             "",
-            mapping_header,
+            "Symbolic mapping (using only your world):",
             "",
-            "- System = the whole Sopranos family network or the entire Barça squad on the pitch.",
-            "- State = how things are right now — who is where, who is stable or under pressure.",
-            "- Interaction = the concrete moves: a conversation in therapy, a pass between players, a sudden shift in trust.",
-            "- Constraint = the rules, debts, loyalties, and tactics that limit what anyone can do next.",
-            "- Uncertainty = what nobody can fully predict — who will flip, where the ball will actually end up, which plan breaks.",
-            "- Observation = the moment something becomes visible: the therapist hearing the truth, the camera seeing a play, the crowd finally understanding the pattern.",
+            f"- System = the whole setup inside {symbol_label}.",
+            "- State = how things are arranged right now.",
+            "- Interaction = the moves that change the situation.",
+            "- Constraint = what limits or shapes those moves.",
+            "- Uncertainty = what can’t be fully predicted yet.",
+            "- Observation = the moment something becomes clear.",
             "",
-            "We stay inside these symbols only; no physics language yet.",
+            "We stay inside these symbols only.",
         ]
+
         mapping_block = "\n".join(mapping_lines)
         text = text + "\n\n" + mapping_block if text else mapping_block
         response["text"] = text
@@ -628,13 +706,13 @@ def ensure_domain1_structure(response: dict) -> dict:
         "rules",
         [
             "One sentence.",
-            "Use only Sopranos or Barça language.",
+            f"Use only language from: {symbol_label}.",
             "No science terms yet.",
         ],
     )
     micro_check.setdefault(
         "prompt",
-        'In your words: what is a "state" — without using science terms?',
+        'Using only your symbols, describe how things are set up right now.'
     )
     response["micro_check"] = micro_check
 
@@ -652,6 +730,43 @@ def domain1_style_instruction() -> str:
         "- NO formal theory, equations, or explanations.\n"
         "- Speak entirely in the learner's own shows, teams, characters, and objects.\n"
         "- Do not explain quantum physics yet; only map and move their symbols.\n"
+        "- Do not introduce any examples, franchises, or characters not explicitly named by the learner.\n"
+    )
+
+def domain_symbolic_lock(state: CobraState) -> str:
+    """
+    V7 HARD SYMBOLIC LOCK — DOMAIN LEVEL
+    Forces the model to stay strictly inside the learner's symbolic universe.
+    """
+    symbols = v7_get_symbol_universe(state) or []
+
+    symbol_list = ", ".join(str(s) for s in symbols) if symbols else "NO SYMBOLS PROVIDED"
+
+    return (
+        "SYMBOLIC LOCK (V7 — NON-NEGOTIABLE):\n"
+        f"- You may ONLY use the following symbols: {symbol_list}\n"
+        "- You may NOT introduce new shows, teams, people, metaphors, or examples.\n"
+        "- Do NOT explain concepts.\n"
+        "- Do NOT teach.\n"
+        "- Do NOT generalize.\n"
+        "- Treat symbols as tokens to be arranged, not stories to be told.\n"
+        "- If a symbol is not listed above, it does not exist.\n"
+    )
+
+def micro_check_symbolic_lock() -> str:
+    """
+    V7 HARD MICRO-CHECK LOCK.
+    This overrides all teaching instincts.
+    """
+    return (
+        "MICRO-CHECK CONSTRAINTS (V7 — STRICT):\n"
+        "- Respond using ONLY symbols, characters, teams, or objects from the learner’s symbolic universe.\n"
+        "- This is NOT an explanation.\n"
+        "- DO NOT define, describe, justify, or teach.\n"
+        "- DO NOT generalize or abstract.\n"
+        "- NO theory, science, or causal language.\n"
+        "- One sentence only.\n"
+        "- Treat this as verification, not instruction.\n"
     )
 
 # ============================================================
@@ -661,7 +776,7 @@ def domain1_style_instruction() -> str:
 @app.get("/", response_class=HTMLResponse)
 def root():
     with open("index.html", "r", encoding="utf-8") as f:
-        return f.read()] = payload
+        return f.read()
 
 @app.post("/cobra/run")
 def run_cobra(payload: dict):
@@ -841,9 +956,29 @@ def run_cobra(payload: dict):
         expected_phase = "PHASE_2" if getattr(state, "phase2_active", False) else "PHASE_1"
         symbol_universe = server_symbol_universe(payload, state) or []
 
+        # =====================================================
+        # V7 SYMBOLIC SCOPE LOCK — GLOBAL (ALL DOMAINS)
+        # =====================================================
+
+        symbol_scope_instruction = (
+            "SYMBOLIC SCOPE RULE (V7 — HARD CONSTRAINT):\n"
+            "- You may ONLY use symbols explicitly provided in the symbol_universe.\n"
+            "- Do NOT invent new characters, teams, shows, metaphors, examples, or analogies.\n"
+            "- Do NOT generalize or substitute with similar symbols.\n"
+            "- If something cannot be expressed using the given symbols, say so explicitly.\n"
+        )
+
+        prompt = symbol_scope_instruction + "\n" + prompt
+
         # A2: Enforce 'Domain 1 = NO THEORY'
         if expected_domain == Domain.D1:
-            prompt = domain1_style_instruction() + "\n\n" + prompt
+            prompt = (
+                domain1_style_instruction()
+                + "\n\n"
+                + domain_symbolic_lock(state)
+                + "\n\n"
+                + prompt
+            )
 
         response = call_model_with_retry_v7(
             prompt=prompt,
@@ -852,6 +987,8 @@ def run_cobra(payload: dict):
             expected_phase=expected_phase,
             symbol_universe=symbol_universe,
         )
+
+        response = enforce_symbol_scope(response, state)
 
         # PHASE 1 TRANSFER COMPLETION (simple heuristic)
         if (
@@ -927,16 +1064,19 @@ def run_cobra(payload: dict):
             response = add_domain3_diagram_from_symbols(response, state)
 
             mc = response.get("micro_check") or {}
-            mc.setdefault("required", True)
-            mc.setdefault("rules", [
+
+            mc["required"] = True
+
+            mc["rules"] = [
                 "One sentence.",
-                "Use only Sopranos or Barça language.",
-                "No science terms yet.",
-            ])
-            mc.setdefault(
-                "prompt",
-                'In your words: what is a "state" — without using science terms?',
-            )
+                "Use only the learner’s own symbols.",
+                "No theory. No explanation. No abstraction.",
+            ]
+
+            mc["prompt"] = "Using only your symbols, describe how things are set up right now."
+
+            mc["system_constraint"] = micro_check_symbolic_lock()
+
             response["micro_check"] = mc
 
             response["intent"] = "MICRO_CHECK"
@@ -1034,8 +1174,14 @@ def run_cobra(payload: dict):
         response.setdefault("domain", server_expected_domain(state))
         response.setdefault("intent", response.get("intent", "NORMAL"))
 
-        save_session_state(session_id, state)
+        # HARD CLEANUP
+        payload = response.get("payload") or {}
+        blocks = payload.get("blocks")
+        if isinstance(blocks, list):
+            payload["blocks"] = remove_placeholder_images(blocks)
+            response["payload"] = payload
 
+        save_session_state(session_id, state)
         return response
 
     except Exception as e:
