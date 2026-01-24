@@ -437,6 +437,8 @@ def validate_cobra_response_v7(
     V7 wrapper: uses your existing validate_cobra_response, then adds V7 hard gates.
     No changes to the original validate_cobra_response.
     """
+
+    # --- BASE VALIDATION ---
     parsed, errors = validate_cobra_response(
         raw_text,
         expected_domain,
@@ -444,15 +446,45 @@ def validate_cobra_response_v7(
         symbol_universe=symbol_universe
     )
 
-    # If schema/base validation already failed, return as-is.
+    # --- V7 SYMBOL LOCK (AUTHORITATIVE) ---
+    # symbols_used MUST come only from the approved symbol_universe
+    if isinstance(parsed, dict):
+        if isinstance(symbol_universe, list) and symbol_universe:
+            parsed["symbols_used"] = symbol_universe.copy()
+    # --- END SYMBOL LOCK ---
+
+    # --- V7 CANONICAL PRE-REVALIDATION ---
+    # If base/schema validation failed, attempt one canonicalization pass and re-validate.
+    if errors or parsed is None:
+        try:
+            candidate = json.loads(raw_text) if isinstance(raw_text, str) else None
+            if isinstance(candidate, dict):
+                candidate = v7_canonicalize_parsed_for_validation(
+                    candidate,
+                    symbol_universe=symbol_universe
+                )
+
+                parsed2, errors2 = validate_cobra_response(
+                    json.dumps(candidate),
+                    expected_domain,
+                    normalize_phase_for_schema(expected_phase),
+                    symbol_universe=symbol_universe
+                )
+
+                if not errors2 and parsed2 is not None:
+                    parsed, errors = parsed2, errors2
+        except Exception:
+            pass
+
+    # --- HARD STOP AFTER REPAIR ATTEMPT ---
     if errors or parsed is None:
         return None, errors
 
-    # Normalize parsed phase defensively
+    # --- PHASE NORMALIZATION ---
     if "phase" in parsed:
         parsed["phase"] = normalize_phase_token(parsed["phase"])
 
-    # Phase mismatch hard stop
+    # --- PHASE MISMATCH HARD STOP ---
     if parsed.get("phase") != normalize_phase_token(expected_phase):
         return None, [
             f"Wrong phase: got {parsed.get('phase')} expected {normalize_phase_token(expected_phase)}"
@@ -476,7 +508,33 @@ def validate_cobra_response_v7(
     except RuntimeError as e:
         return None, [str(e)]
 
+    # --- FINAL SUCCESS RETURN ---
     return parsed, []
+
+def v7_canonicalize_parsed_for_validation(parsed: dict, symbol_universe=None) -> dict:
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    # REQUIRED BY V7 SCHEMA (per your actual error)
+    parsed.setdefault("diagnostic_mapping", {})
+
+    # STABLE SHAPE
+    parsed.setdefault("payload", {})
+    parsed.setdefault("micro_check", {})
+    parsed.setdefault("text", "")
+
+    # SYMBOL UNIVERSE LOCK (STRICT)
+    allowed = symbol_universe if isinstance(symbol_universe, list) else []
+    used = parsed.get("symbols_used")
+
+    if allowed:
+        if not isinstance(used, list) or not used:
+            parsed["symbols_used"] = allowed
+        else:
+            filtered = [s for s in used if s in allowed]
+            parsed["symbols_used"] = filtered if filtered else allowed
+
+    return parsed
 
 def call_model_with_retry_v7(
     prompt,

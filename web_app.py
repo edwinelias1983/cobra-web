@@ -1148,7 +1148,7 @@ def run_cobra(payload: dict):
 
         # Only inject intro text if NOTHING meaningful exists yet
             if not has_blocks and not has_text:
-                
+
                 symbolic_universe_label = " + ".join(
                     getattr(state, "symbol_universe_labels", [])
                 ) if getattr(state, "symbol_universe_labels", None) else "your symbols"
@@ -1160,17 +1160,18 @@ def run_cobra(payload: dict):
                     else str(mode) if mode else "Unknown"
                 )
 
-                intro_lines = [
+                intro_lines.extend([
                     "Domain 1 initialized.",
                     f"Symbolic universe = {symbolic_universe_label}",
                     f"Mode = {mode_label}",
                     "",
                     "We move bottom-up.",
                     "",
-                ]
+                ])
 
-                response["text"] = "\n".join(intro_lines)
-
+        if intro_lines:
+            response["text"] = "\n".join(intro_lines)
+            
         # Mark intro as shown regardless, so it never fires again
         state.domain1_intro_shown = True
 
