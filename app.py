@@ -366,7 +366,7 @@ def v7_get_symbol_universe(state: CobraState) -> list:
     Canonical V7 symbol universe.
     Symbols must originate from Domain 0 / 0B only.
     """
-    su = state.symbolic_universe.get("symbols", [])
+    su = state.symbolic_universe.get("symbol_universe", [])
     if not isinstance(su, list):
         return []
     return su
@@ -785,6 +785,19 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
       2) what they naturally understand/like (symbol universe seed)
       + interaction mode selection
     """
+        # V7 HARD INVARIANT — symbolic_universe must be dict
+    if getattr(state, "symbolic_universe", None) is None:
+        state.symbolic_universe = {}
+    elif isinstance(state.symbolic_universe, list):
+        state.symbolic_universe = {"symbol_universe": state.symbolic_universe}
+    elif not isinstance(state.symbolic_universe, dict):
+        raise TypeError(
+            f"V7 violation: symbolic_universe must be dict, got {type(state.symbolic_universe)}"
+        )
+
+    state.symbolic_universe.setdefault("symbol_universe", [])
+    state.symbolic_universe.setdefault("domain0_raw", [])
+
     if not user_text or not user_text.strip():
         return (False, "Domain 0 requires answers. Please answer the questions exactly as asked.")
 
@@ -802,10 +815,16 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
     # Set mode
     state.interaction_mode = InteractionMode(mode)
 
-    # Mark complete
-    state.domain0_complete = True
+    # Mark complete ONLY if symbol universe exists (V7 HARD RULE)
+    symbols = state.symbolic_universe.get("symbol_universe")
 
-    return (True, "")
+    if isinstance(symbols, list) and symbols:
+        return (True, "")
+    else:
+        return (
+            False,
+            "Domain 0 cannot complete without a non-empty symbol universe."
+        )
 
 # ============================================================
 # V7 REQUIRED: DOMAIN 0B — AUDITORY SYMBOL MAP

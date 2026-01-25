@@ -231,7 +231,7 @@ def server_symbol_universe(payload: dict, state: CobraState):
         symbols = normalize_symbol_universe(payload)
 
         if symbols:
-            state.symbolic_universe = symbols
+            state.symbolic_universe["symbol_universe"] = symbols
             return symbols
 
         # Domain 0 attempted but invalid → HARD REPAIR
@@ -240,9 +240,10 @@ def server_symbol_universe(payload: dict, state: CobraState):
     # -------------------------
     # DOMAIN 0 LOCKED
     # -------------------------
-    if isinstance(state.symbolic_universe, list) and state.symbolic_universe:
-        return state.symbolic_universe
-
+    su = state.symbolic_universe.get("symbol_universe")
+    if isinstance(su, list) and su:
+        return su
+        
     # IMPOSSIBLE STATE → FORCE REPAIR
     state.domain0_complete = False
     return None
@@ -878,9 +879,23 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        # =====================================================
+        # V7 INVARIANT (MANDATORY): symbolic_universe MUST be dict
+        # app.py uses .setdefault(...) on symbolic_universe
+        # =====================================================
+        if getattr(state, "symbolic_universe", None) is None:
+            state.symbolic_universe = {}
+        elif isinstance(state.symbolic_universe, list):
+            state.symbolic_universe = {"symbol_universe": state.symbolic_universe}
+        elif not isinstance(state.symbolic_universe, dict):
+            raise TypeError(f"Invalid symbolic_universe type: {type(state.symbolic_universe)}")
+
+        state.symbolic_universe.setdefault("symbol_universe", [])
+        state.symbolic_universe.setdefault("domain0_raw", [])
+
         # If caller wants to reseed symbols, clear the old universe
         if reset_symbols:
-            state.symbolic_universe = None
+            state.symbolic_universe = {"symbol_universe": [], "domain0_raw": []}
             state.domain0_complete = False  # only if you want to re-run Domain 0
 
         # =====================================================
@@ -1005,13 +1020,12 @@ def run_cobra(payload: dict):
         expected_phase = "PHASE_2" if getattr(state, "phase2_active", False) else "PHASE_1"
         symbol_universe = server_symbol_universe(payload, state) or []
 
-        # =====================================================
-        # FIX 2 — DOMAIN 0 SYMBOL UNIVERSE COMMIT (V7 HARD)
-        # =====================================================
+        # V7 HARD RULE:
+        # Domain 0 completes IFF symbol universe is committed
         if not getattr(state, "domain0_complete", False):
-            # Domain 0 still in progress
             if isinstance(symbol_universe, list) and symbol_universe:
-                state.symbolic_universe = symbol_universe
+                state.symbolic_universe["symbol_universe"] = symbol_universe
+                state.domain0_complete = True
 
         # =====================================================
         # V7 SYMBOLIC SCOPE LOCK — GLOBAL (ALL DOMAINS)
