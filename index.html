@@ -295,6 +295,18 @@ pre{
 <script>
 let cobraInitialized = false;
 
+// =====================================================
+// CONSOLE / TEST HARNESS ENTRYPOINT (V7-SAFE)
+// =====================================================
+window.cobra = async (payload) => {
+  const res = await fetch("/cobra/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+};
+
 function setTheme(t){
   document.body.className = t;
   document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
