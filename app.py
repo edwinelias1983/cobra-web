@@ -621,15 +621,18 @@ def call_model_with_retry_v7(
     # ---------------------------
     # V7 DOMAIN 0B
     # ---------------------------
+    
     if expected_domain == "D0B":
-    symbols = state.symbolic_universe.get("symbol_universe")
-    if not isinstance(symbols, list) or not symbols:
-        d0 = v7_domain0_response()
-        d0["intent"] = "REPAIR"
-        d0["repair_required"] = True
-        d0["stability_assessment"] = "UNSTABLE"
-        d0["text"] += "\n\nREPAIR REQUIRED: Domain 0 must create a non-empty symbol universe before proceeding."
-        return d0
+        symbols = state.symbolic_universe.get("symbol_universe")
+        if not isinstance(symbols, list) or not symbols:
+            d0 = v7_domain0_response()
+            d0["intent"] = "REPAIR"
+            d0["repair_required"] = True
+            d0["stability_assessment"] = "UNSTABLE"
+            d0["text"] += (
+                "\n\nREPAIR REQUIRED: Domain 0 must create a non-empty symbol universe before proceeding."
+            )
+            return d0
 
     current = v7_state_domain_label(state)
     expected_next = v7_expected_next_domain(current)
@@ -784,14 +787,6 @@ def v7_domain0_response() -> dict:
 # V7 REQUIRED: DOMAIN 0 — RECORD + HARD GATE (NEW)
 # ============================================================
 
-def v7_extract_interaction_mode(text: str) -> str | None:
-    t = (text or "").strip().lower()
-    # accept loose matches: "learn", "adventure", "mastery"
-    for m in ("learn", "adventure", "mastery"):
-        if m in t:
-            return m
-    return None
-
 def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, str]:
     """
     Records Domain 0 answers into state.symbolic_universe and sets interaction_mode.
@@ -801,9 +796,10 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
       2) what they naturally understand/like (symbol universe seed)
       + interaction mode selection
     """
-        # V7 HARD INVARIANT — symbolic_universe must be dict
+    # V7 HARD INVARIANT — symbolic_universe must be dict
     if getattr(state, "symbolic_universe", None) is None:
         state.symbolic_universe = {}
+
     elif isinstance(state.symbolic_universe, list):
         state.symbolic_universe = {"symbol_universe": state.symbolic_universe}
     elif not isinstance(state.symbolic_universe, dict):
