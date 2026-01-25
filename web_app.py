@@ -188,32 +188,65 @@ def server_expected_domain(state: CobraState) -> str:
         return Domain.D5
     return Domain(phase1_seq[idx + 1])
 
+def normalize_symbol_universe(payload: dict) -> list:
+    """
+    Server-authoritative symbol extraction.
+    Domain 0 only. No side effects.
+    """
+    symbols = []
+
+    su = payload.get("symbol_universe")
+    if isinstance(su, list):
+        symbols.extend(su)
+
+    likes = payload.get("likes")
+    if isinstance(likes, str):
+        likes = [likes]
+    if isinstance(likes, list):
+        symbols.extend(likes)
+
+    cleaned = []
+    for s in symbols:
+        if isinstance(s, str):
+            s = s.strip()
+            if s and s not in cleaned:
+                cleaned.append(s)
+
+    return cleaned
+
 def server_symbol_universe(payload: dict, state: CobraState):
     """
-    Server-owned symbolic universe:
-
-    - Before Domain 0 is complete OR when reset_symbols is true:
-      accept from payload and commit into state.
-    - Otherwise: ignore payload and use stored state only.
+    V7 HARD GUARANTEE:
+    - Domain 0 completion => non-empty symbol universe
+    - After lock, payload is ignored
     """
+
     reset_symbols = bool(payload.get("reset_symbols"))
 
-    # Allow payload to (re)seed when Domain 0 not locked OR reset is requested
-    if (not getattr(state, "domain0_complete", False) or reset_symbols) \
-            and "symbol_universe" in payload:
-        su = payload["symbol_universe"]
-        state.symbolic_universe = su
-        return su
+    # -------------------------
+    # DOMAIN 0 (UNLOCKED)
+    # -------------------------
+    if not getattr(state, "domain0_complete", False) or reset_symbols:
 
-    # After Domain 0 is complete, ignore payload and use stored state
-    if isinstance(state.symbolic_universe, dict):
-        return (
-            state.symbolic_universe.get("symbol_universe")
-            or state.symbolic_universe.get("symbols")
-        )
-    if isinstance(state.symbolic_universe, list):
+        symbols = normalize_symbol_universe(payload)
+
+        if symbols:
+            state.symbolic_universe = symbols
+            return symbols
+
+        # Domain 0 attempted but invalid → HARD REPAIR
+        return None
+
+    # -------------------------
+    # DOMAIN 0 LOCKED
+    # -------------------------
+    if isinstance(state.symbolic_universe, list) and state.symbolic_universe:
         return state.symbolic_universe
+
+    # IMPOSSIBLE STATE → FORCE REPAIR
+    state.domain0_complete = False
     return None
+
 
 def enforce_symbol_scope(response: dict, state: CobraState) -> dict:
     """
@@ -1004,6 +1037,36 @@ def run_cobra(payload: dict):
             symbol_universe=symbol_universe,
         )
 
+        # =====================================================
+        # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (HARD)
+        # =====================================================
+
+        if getattr(state, "domain0_complete", False):
+            symbols = v7_get_symbol_universe(state)
+
+            if not isinstance(symbols, list) or len(symbols) == 0:
+                # This state is ILLEGAL in V7 → force repair
+                state.domain0_complete = False
+                state.symbolic_universe = None
+
+            save_session_state(session_id, state)
+
+            return {
+                "domain": "D0",
+                "intent": "REPAIR",
+                "repair_required": True,
+                "text": (
+                    "Domain 0 integrity failure. "
+                    "A non-empty symbol universe is required before continuing."
+                ),
+                "symbol_universe": [],
+                "symbols_used": [],
+                "state": {
+                    "domain0_complete": False,
+                    "domain0b_complete": False,
+                },
+            }
+
         response = enforce_symbol_scope(response, state)
 
         # =====================================================
@@ -1213,4 +1276,4 @@ def run_cobra(payload: dict):
         }
 
 
-# force redeploy Sat Jan 24 16:08:43 PST 2026
+
