@@ -1038,6 +1038,19 @@ def run_cobra(payload: dict):
         )
 
         # =====================================================
+        # V7 HARD RESPONSE NORMALIZATION (ROBUST)
+        # =====================================================
+        if not isinstance(response, dict):
+            raise TypeError(
+                f"V7 violation: model returned {type(response)} instead of dict"
+            )
+
+        # Guarantee core shape early
+        response.setdefault("payload", {})
+        response.setdefault("micro_check", {})
+        response.setdefault("text", "")
+
+        # =====================================================
         # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (HARD)
         # =====================================================
 
@@ -1242,9 +1255,6 @@ def run_cobra(payload: dict):
         state.domain1_intro_shown = True
 
         # C2: ensure response has stable shape (NO DOMAIN MUTATION)
-        response.setdefault("payload", {})
-        response.setdefault("micro_check", {})
-        response.setdefault("text", "")
 
         if "intent" not in response:
             response["intent"] = "NORMAL"
