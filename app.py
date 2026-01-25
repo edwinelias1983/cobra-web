@@ -164,7 +164,25 @@ class InteractionMode(str, Enum):
     learn = "learn"
     adventure = "adventure"
     mastery = "mastery"
+# ============================================================
+# V7 REQUIRED: INTERACTION MODE EXTRACTOR (PURE)
+# ============================================================
 
+def v7_extract_interaction_mode(text: str) -> str | None:
+    if not text:
+        return None
+
+    t = text.lower()
+
+    if "adventure mode" in t or "adventure" in t:
+        return "adventure"
+    if "learn mode" in t or "learn" in t:
+        return "learn"
+    if "mastery mode" in t or "mastery" in t:
+        return "mastery"
+
+    return None
+    
 class Domain(str, Enum):
     D0  = "D0"
     D0B = "D0B"
