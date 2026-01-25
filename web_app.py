@@ -887,7 +887,7 @@ def run_cobra(payload: dict):
         # V7 HARD GATE — MICRO-CHECK REQUIRES SYMBOL UNIVERSE
         # =====================================================
         if payload.get("micro_response"):
-            if not getattr(state, "symbolic_universe", None) or len(state.symbolic_universe) == 0:
+            if not getattr(state, "domain0_complete", False):
                 return {
                     "domain": "D0",
                     "intent": "REPAIR",
@@ -899,7 +899,7 @@ def run_cobra(payload: dict):
                         "domain0_complete": False,
                         "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
                 },
-            }
+             }
 
         # =====================================================
         # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
@@ -1006,6 +1006,14 @@ def run_cobra(payload: dict):
         symbol_universe = server_symbol_universe(payload, state) or []
 
         # =====================================================
+        # FIX 2 — DOMAIN 0 SYMBOL UNIVERSE COMMIT (V7 HARD)
+        # =====================================================
+        if not getattr(state, "domain0_complete", False):
+            # Domain 0 still in progress
+            if isinstance(symbol_universe, list) and symbol_universe:
+                state.symbolic_universe = symbol_universe
+
+        # =====================================================
         # V7 SYMBOLIC SCOPE LOCK — GLOBAL (ALL DOMAINS)
         # =====================================================
 
@@ -1036,6 +1044,48 @@ def run_cobra(payload: dict):
             expected_phase=expected_phase,
             symbol_universe=symbol_universe,
         )
+        # =====================================================
+        #  FIX 4 — HARD RESPONSE ENVELOPE FREEZE (V7)
+        # =====================================================
+
+        # 1. response MUST be a dict
+        if not isinstance(response, dict):
+            raise TypeError(
+                f"V7 violation: response envelope corrupted: {type(response)}"
+            )
+
+        # 2. Freeze reference (prevent accidental reassignment)
+        response = dict(response)
+
+        # 3. Enforce payload shape
+        payload_obj = response.get("payload")
+        if payload_obj is None:
+            payload_obj = {}
+        elif not isinstance(payload_obj, dict):
+            raise TypeError(
+                f"V7 violation: payload must be dict, got {type(payload_obj)}"
+            )
+        response["payload"] = payload_obj
+
+        # 4. Enforce blocks isolation
+        blocks = payload_obj.get("blocks")
+        if blocks is not None and not isinstance(blocks, list):
+            raise TypeError(
+                f"V7 violation: payload.blocks must be list, got {type(blocks)}"
+            )
+
+        # 5. Enforce micro_check isolation
+        micro = response.get("micro_check")
+        if micro is None:
+            response["micro_check"] = {}
+        elif not isinstance(micro, dict):
+            raise TypeError(
+            f"V7 violation: micro_check must be dict, got {type(micro)}"
+        )   
+
+        # 6. Enforce text scalar
+        if not isinstance(response.get("text", ""), str):
+            response["text"] = str(response.get("text", ""))
 
         # =====================================================
         # V7 HARD RESPONSE NORMALIZATION (ROBUST)
@@ -1049,6 +1099,15 @@ def run_cobra(payload: dict):
         response.setdefault("payload", {})
         response.setdefault("micro_check", {})
         response.setdefault("text", "")
+
+        # =====================================================
+        # V7 HARD RESPONSE INVARIANT
+        # =====================================================
+        if not isinstance(response.get("payload"), dict):
+            raise TypeError(
+                f"V7 violation: response['payload'] must be dict, "
+                f"got {type(response.get('payload'))}"
+        )
 
         # =====================================================
         # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (HARD)
