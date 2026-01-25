@@ -463,13 +463,6 @@ def validate_cobra_response_v7(
         symbol_universe=symbol_universe
     )
 
-    # --- V7 SYMBOL LOCK (AUTHORITATIVE) ---
-    # symbols_used MUST come only from the approved symbol_universe
-    if isinstance(parsed, dict):
-        if isinstance(symbol_universe, list) and symbol_universe:
-            parsed["symbols_used"] = symbol_universe.copy()
-    # --- END SYMBOL LOCK ---
-
     # --- V7 CANONICAL PRE-REVALIDATION ---
     # If base/schema validation failed, attempt one canonicalization pass and re-validate.
     if errors or parsed is None:
@@ -561,6 +554,29 @@ def call_model_with_retry_v7(
     symbol_universe,
     max_retries=3,
 ):
+    # ============================
+    # V7 INVARIANT REPAIR (FIX 1)
+    # ============================
+    if getattr(state, "symbolic_universe", None) is None:
+        state.symbolic_universe = {}
+    elif isinstance(state.symbolic_universe, list):
+        state.symbolic_universe = {"symbol_universe": state.symbolic_universe}
+    elif not isinstance(state.symbolic_universe, dict):
+        raise RuntimeError(
+            f"[V7 VIOLATION] symbolic_universe corrupted: {type(state.symbolic_universe)}"
+        )
+
+    su = state.symbolic_universe.setdefault("symbol_universe", [])
+    if not isinstance(su, list):
+        state.symbolic_universe["symbol_universe"] = []
+
+    if getattr(state, "auditory_universe", None) is None:
+        state.auditory_universe = {}
+    elif not isinstance(state.auditory_universe, dict):
+        raise RuntimeError(
+            f"[V7 VIOLATION] auditory_universe corrupted: {type(state.auditory_universe)}"
+        )
+
     """
     V7 wrapper: enforces domain progression via state + validates with V7 invariants.
     Uses llm_call + retry loop.
@@ -605,10 +621,15 @@ def call_model_with_retry_v7(
     # ---------------------------
     # V7 DOMAIN 0B
     # ---------------------------
-    if expected_domain == "D0B" and not state.domain0b_complete:
-        v7_record_domain0b_answer(state, prompt)
-        if not state.domain0b_complete:
-            return v7_domain0b_response(state)
+    if expected_domain == "D0B":
+    symbols = state.symbolic_universe.get("symbol_universe")
+    if not isinstance(symbols, list) or not symbols:
+        d0 = v7_domain0_response()
+        d0["intent"] = "REPAIR"
+        d0["repair_required"] = True
+        d0["stability_assessment"] = "UNSTABLE"
+        d0["text"] += "\n\nREPAIR REQUIRED: Domain 0 must create a non-empty symbol universe before proceeding."
+        return d0
 
     current = v7_state_domain_label(state)
     expected_next = v7_expected_next_domain(current)
@@ -714,11 +735,6 @@ def call_model_with_retry_v7(
         and maybe_offer_stamina_gate(state)
     ):
         return v7_stamina_gate_response(state)
-
-    # --- V7 FINAL SYMBOL AUTHORITY LOCK (FIX #2) ---
-    if isinstance(parsed, dict):
-        if isinstance(symbol_universe, list):
-            parsed["symbols_used"] = symbol_universe.copy()
             
     return parsed
 
@@ -819,6 +835,7 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
     symbols = state.symbolic_universe.get("symbol_universe")
 
     if isinstance(symbols, list) and symbols:
+        state.domain0_complete = True
         return (True, "")
     else:
         return (
