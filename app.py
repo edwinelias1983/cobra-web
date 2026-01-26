@@ -685,9 +685,12 @@ def call_model_with_retry_v7(
         d0["text"] += "\n\nREPAIR REQUIRED: " + msg
         return d0
 
-    # IMPORTANT: Even if ok == True, Domain 0 is still NOT complete here
-    return v7_domain0_response()
-
+    # IMPORTANT: Domain 0 answers recorded successfully (but NOT confirmed)
+    d0 = v7_domain0_response()
+    d0["intent"] = "EXPLANATION"
+    d0["stability_assessment"] = "STABLE"
+    d0["text"] = "Symbols recorded but not yet confirmed. Please confirm your symbolic universe."
+    return d0
     # ---------------------------
     # V7 DOMAIN 0B
     # ---------------------------
