@@ -680,23 +680,29 @@ def call_model_with_retry_v7(
                 "before Domain 0 confirmation"
             )
 
-    # Only D0 logic is allowed here
-    text_prompt = prompt if isinstance(prompt, str) else json.dumps(prompt)
-    ok, msg = v7_record_domain0_answers(state, text_prompt)
-    if not ok:
-        d0 = v7_domain0_response()
-        d0["intent"] = "REPAIR"
-        d0["repair_required"] = True
-        d0["stability_assessment"] = "UNSTABLE"
-        d0["text"] += "\n\nREPAIR REQUIRED: " + str(msg)
-        return d0
+    # Only record Domain 0 answers if NOT confirming
+    if not state.domain0_complete and not (
+        isinstance(payload, dict) and payload.get("intent") == "D0_CONFIRM"
+    ):
+        text_prompt = prompt if isinstance(prompt, str) else json.dumps(prompt)
+        ok, msg = v7_record_domain0_answers(state, text_prompt)
+        if not ok:
+            d0 = v7_domain0_response()
+            d0["intent"] = "REPAIR"
+            d0["repair_required"] = True
+            d0["stability_assessment"] = "UNSTABLE"
+            d0["text"] += "\n\nREPAIR REQUIRED: " + str(msg)
+            return d0
 
     # IMPORTANT: Domain 0 answers recorded successfully (but NOT confirmed)
     d0 = v7_domain0_response()
     d0["intent"] = "EXPLANATION"
     d0["stability_assessment"] = "STABLE"
     d0["text"] = "Symbols recorded but not yet confirmed. Please confirm your symbolic universe."
-    return d0
+    
+    if expected_domain == "D0":
+        return d0
+
     # ---------------------------
     # V7 DOMAIN 0B
     # ---------------------------
