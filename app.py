@@ -197,14 +197,22 @@ class Domain(str, Enum):
 @dataclass
 class CobraState:
     interaction_mode: InteractionMode | None = None
+
+    # Domain 0
     domain0_complete: bool = False
-    domain0b_complete: bool = False 
+    domain0b_complete: bool = False
+    domain0_candidate_symbols: list[str] = field(default_factory=list)
+
     current_domain: str = "D0"
+
+    symbolic_universe: dict = field(default_factory=dict)
+    auditory_universe: dict = field(default_factory=dict)
+
     stamina_used: bool = False
     consolidation_active: bool = False
     last_microcheck_passed: bool = False
-    symbolic_universe: dict = field(default_factory=dict)
-    auditory_universe: dict = field(default_factory=dict)
+
+    last_intent: str | None = None
 
     phase2_depth_selected: bool = False
     phase2_pressure_test: bool = False
@@ -601,24 +609,84 @@ def call_model_with_retry_v7(
     """
 
     # ---------------------------
-    # V7 HARD STOP: DOMAIN 0
+    # V7 FIX #3 — EXPLICIT DOMAIN 0 CONFIRMATION
+    # ---------------------------
+    try:
+        payload = json.loads(prompt) if isinstance(prompt, str) else None
+    except Exception:
+            payload = None
+
+    if (
+        isinstance(payload, dict)
+        and payload.get("intent") == "D0_CONFIRM"
+    ):
+        confirmed = payload.get("confirmed_symbols")
+
+        # V7 FIX #6 — confirmed symbols must come from extracted candidates
+        candidates = state.domain0_candidate_symbols
+
+        if not candidates:
+            raise RuntimeError(
+                "[V7 VIOLATION] No candidate symbols available for confirmation"
+            )
+
+        invalid = [s for s in confirmed if s not in candidates]
+        if invalid:
+            raise RuntimeError(
+                f"[V7 VIOLATION] Confirmed symbols not in candidate list: {invalid}"
+            )
+
+        if not isinstance(confirmed, list) or not confirmed:
+            raise RuntimeError(
+                "[V7 VIOLATION] D0_CONFIRM requires non-empty confirmed_symbols list"
+            )
+
+        # THE ONLY LEGAL PLACE DOMAIN 0 CAN COMPLETE
+        state.symbolic_universe["symbol_universe"] = confirmed
+        # V7 FIX #6 — clear provisional state after confirmation
+        state.domain0_candidate_symbols.clear()
+        state.domain0_complete = True
+        state.last_intent = "D0_CONFIRM"
+
+        return {
+            "domain": "D0",
+            "phase": "PHASE_1",
+            "intent": "CONFIRMATION",
+            "introduced_new_symbols": False,
+            "repair_required": False,
+            "stability_assessment": "STABLE",
+            "text": "Symbolic universe confirmed. Domain 0 locked.",
+            "symbols_used": [],
+            "micro_check": {
+                "prompt": "Proceeding to Domain 0B.",
+                "expected_response_type": "conceptual"
+            },
+            "next_domain_recommendation": "D0B",
+            "media_suggestions": []
+        }
+
+    # ---------------------------
+    # V7 — HARD BLOCK UNTIL DOMAIN 0 CONFIRMED
     # ---------------------------
     if not state.domain0_complete:
-        if expected_domain != "D0":
-            return v7_domain0_response()
+    if expected_domain != "D0":
+        raise RuntimeError(
+            f"[V7 VIOLATION] Attempted to enter {expected_domain} "
+            "before Domain 0 confirmation"
+        )
 
-        ok, msg = v7_record_domain0_answers(state, prompt)
-        if not ok:
-            d0 = v7_domain0_response()
-            d0["intent"] = "REPAIR"
-            d0["repair_required"] = True
-            d0["stability_assessment"] = "UNSTABLE"
-            d0["text"] = d0["text"] + "\n\nREPAIR REQUIRED: " + msg
-            d0["micro_check"] = {
-                "prompt": "Answer both Domain 0 questions and choose learn/adventure/mastery.",
-                "expected_response_type": "conceptual"
-            }
-            return d0
+    # Only D0 logic is allowed here
+    ok, msg = v7_record_domain0_answers(state, prompt)
+    if not ok:
+        d0 = v7_domain0_response()
+        d0["intent"] = "REPAIR"
+        d0["repair_required"] = True
+        d0["stability_assessment"] = "UNSTABLE"
+        d0["text"] += "\n\nREPAIR REQUIRED: " + msg
+        return d0
+
+    # IMPORTANT: Even if ok == True, Domain 0 is still NOT complete here
+    return v7_domain0_response()
     # ---------------------------
     # V7 DOMAIN 0 ATOMIC COMPLETION
     # ---------------------------
@@ -865,20 +933,18 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
             for c in candidates:
                 sym = c.strip()
                 if sym:
-                    state.symbolic_universe.setdefault("symbol_universe", [])
-                    state.symbolic_universe["symbol_universe"].append(sym)
+                    state.domain0_candidate_symbols.append(sym)
     # ---------------------------
     # FINAL DOMAIN 0 COMPLETION CHECK
     # ---------------------------
-    symbols = state.symbolic_universe.get("symbol_universe")
+    if state.domain0_candidate_symbols:
+        state.domain0_complete = False
+        return (True, "Symbols recorded but NOT confirmed.")
 
-    if isinstance(symbols, list) and symbols:
-        state.domain0_complete = True
-        return (True, "")
     else:
         return (
             False,
-            "Domain 0 cannot complete without a non-empty symbol universe."
+            "Domain 0 requires at least one symbol to proceed."
         )
 
 # ============================================================
