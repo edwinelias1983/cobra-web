@@ -669,11 +669,11 @@ def call_model_with_retry_v7(
     # V7 — HARD BLOCK UNTIL DOMAIN 0 CONFIRMED
     # ---------------------------
     if not state.domain0_complete:
-    if expected_domain != "D0":
-        raise RuntimeError(
-            f"[V7 VIOLATION] Attempted to enter {expected_domain} "
-            "before Domain 0 confirmation"
-        )
+        if expected_domain != "D0":
+            raise RuntimeError(
+                f"[V7 VIOLATION] Attempted to enter {expected_domain} "
+                "before Domain 0 confirmation"
+            )
 
     # Only D0 logic is allowed here
     ok, msg = v7_record_domain0_answers(state, prompt)
@@ -688,21 +688,51 @@ def call_model_with_retry_v7(
     # IMPORTANT: Even if ok == True, Domain 0 is still NOT complete here
     return v7_domain0_response()
     # ---------------------------
-    # V7 DOMAIN 0 ATOMIC COMPLETION
+    # V7 DOMAIN 0 — SINGLE AUTHORITY BLOCK
     # ---------------------------
-    if not (
-        state.domain0_complete
-        and state.interaction_mode is not None
+    if not state.domain0_complete:
+
+    # HARD BLOCK: Domain 0 must be first
+    if expected_domain != "D0":
+        raise RuntimeError(
+            f"[V7 VIOLATION] Attempted to enter {expected_domain} "
+            "before Domain 0 confirmation"
+        )
+
+    # Record answers (NO completion here)
+    ok, msg = v7_record_domain0_answers(state, prompt)
+
+    # Invalid input → repair
+    if not ok:
+        d0 = v7_domain0_response()
+        d0.update({
+            "intent": "REPAIR",
+            "repair_required": True,
+            "stability_assessment": "UNSTABLE",
+            "text": d0["text"] + "\n\nREPAIR REQUIRED: " + msg
+        })
+        return d0
+
+    # 🔒 ATOMIC COMPLETION GATE (cannot be bypassed)
+    if (
+        not state.domain0_candidate_symbols
+        or state.interaction_mode is None
     ):
         d0 = v7_domain0_response()
-        d0["intent"] = "REPAIR"
-        d0["repair_required"] = True
-        d0["stability_assessment"] = "UNSTABLE"
-        d0["text"] = (
-            d0["text"]
-            + "\n\nREPAIR REQUIRED: Complete both Domain 0 questions and select an interaction mode."
-        )
+        d0.update({
+            "intent": "REPAIR",
+            "repair_required": True,
+            "stability_assessment": "UNSTABLE",
+            "text": (
+                d0["text"]
+                + "\n\nREPAIR REQUIRED: "
+                "Provide symbols AND choose an interaction mode."
+            )
+        })
         return d0
+
+    # Still NOT complete until D0_CONFIRM
+    return v7_domain0_response()
 
     # ---------------------------
     # V7 DOMAIN 0B
