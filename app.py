@@ -611,10 +611,15 @@ def call_model_with_retry_v7(
     # ---------------------------
     # V7 FIX #3 — EXPLICIT DOMAIN 0 CONFIRMATION
     # ---------------------------
-    try:
-        payload = json.loads(prompt) if isinstance(prompt, str) else None
-    except Exception:
+    if isinstance(prompt, dict):
+        payload = prompt
+    elif isinstance(prompt, str):
+        try:
+            payload = json.loads(prompt)
+        except Exception:
             payload = None
+    else:
+        payload = None
 
     if (
         isinstance(payload, dict)
