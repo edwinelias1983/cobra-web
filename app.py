@@ -687,52 +687,6 @@ def call_model_with_retry_v7(
 
     # IMPORTANT: Even if ok == True, Domain 0 is still NOT complete here
     return v7_domain0_response()
-    # ---------------------------
-    # V7 DOMAIN 0 — SINGLE AUTHORITY BLOCK
-    # ---------------------------
-    if not state.domain0_complete:
-
-    # HARD BLOCK: Domain 0 must be first
-    if expected_domain != "D0":
-        raise RuntimeError(
-            f"[V7 VIOLATION] Attempted to enter {expected_domain} "
-            "before Domain 0 confirmation"
-        )
-
-    # Record answers (NO completion here)
-    ok, msg = v7_record_domain0_answers(state, prompt)
-
-    # Invalid input → repair
-    if not ok:
-        d0 = v7_domain0_response()
-        d0.update({
-            "intent": "REPAIR",
-            "repair_required": True,
-            "stability_assessment": "UNSTABLE",
-            "text": d0["text"] + "\n\nREPAIR REQUIRED: " + msg
-        })
-        return d0
-
-    # 🔒 ATOMIC COMPLETION GATE (cannot be bypassed)
-    if (
-        not state.domain0_candidate_symbols
-        or state.interaction_mode is None
-    ):
-        d0 = v7_domain0_response()
-        d0.update({
-            "intent": "REPAIR",
-            "repair_required": True,
-            "stability_assessment": "UNSTABLE",
-            "text": (
-                d0["text"]
-                + "\n\nREPAIR REQUIRED: "
-                "Provide symbols AND choose an interaction mode."
-            )
-        })
-        return d0
-
-    # Still NOT complete until D0_CONFIRM
-    return v7_domain0_response()
 
     # ---------------------------
     # V7 DOMAIN 0B
@@ -943,6 +897,9 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
     # Set mode
     state.interaction_mode = InteractionMode(mode)
 
+    # V7 FIX #2 — reset candidate symbols per submission (provisional only)
+    state.domain0_candidate_symbols.clear()
+
     # ---------------------------
     # V7 OPTION B: EXPLICIT SYMBOL EXTRACTION (FIXED)
     # ---------------------------
@@ -965,17 +922,12 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
                 if sym:
                     state.domain0_candidate_symbols.append(sym)
     # ---------------------------
-    # FINAL DOMAIN 0 COMPLETION CHECK
+    # V7: record-only success
     # ---------------------------
-    if state.domain0_candidate_symbols:
-        state.domain0_complete = False
-        return (True, "Symbols recorded but NOT confirmed.")
+    if not state.domain0_candidate_symbols:
+        return (False, "Domain 0 requires at least one symbol to proceed.")
 
-    else:
-        return (
-            False,
-            "Domain 0 requires at least one symbol to proceed."
-        )
+    return (True, "Domain 0 input recorded.")
 
 # ============================================================
 # V7 REQUIRED: DOMAIN 0B — AUDITORY SYMBOL MAP
