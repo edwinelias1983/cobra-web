@@ -851,7 +851,7 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
     lines = [l.strip() for l in user_text.splitlines() if l.strip()]
 
     for line in lines:
-    l   ower = line.lower()
+        lower = line.lower()
 
         if "naturally understand" in lower:
              # everything AFTER the colon is the symbol list
