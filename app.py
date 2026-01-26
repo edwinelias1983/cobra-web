@@ -872,6 +872,9 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
                         state.symbolic_universe.setdefault("symbol_universe", [])
                         state.symbolic_universe["symbol_universe"].append(sym)
 
+    # ---------------------------
+    # FINAL DOMAIN 0 COMPLETION CHECK
+    # ---------------------------
     symbols = state.symbolic_universe.get("symbol_universe")
 
     if isinstance(symbols, list) and symbols:
