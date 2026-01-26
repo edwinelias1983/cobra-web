@@ -848,19 +848,28 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
     # ---------------------------
     # V7 OPTION B: EXPLICIT SYMBOL EXTRACTION (FIXED)
     # ---------------------------
+    lines = [l.strip() for l in user_text.splitlines() if l.strip()]
+
     for line in lines:
-    lower = line.lower()
+        lower = line.lower()
 
-    # V7 OPTION B — explicit symbol declaration via colon
     if "understand" in lower and ":" in line:
-        _, raw = line.split(":", 1)
+        parts = line.split(":", 1)
 
-        candidates = raw.replace(" and ", ",").split(",")
+        if len(parts) == 2:
+            raw = parts[1]
 
-        for c in candidates:
-            sym = c.strip()
-            if sym:
-                state.symbolic_universe["symbol_universe"].append(sym)
+            candidates = (
+                raw.replace(" and ", ",")
+                   .split(",")
+            )
+
+            for c in candidates:
+                sym = c.strip()
+                if sym:
+                    state.symbolic_universe.setdefault("symbol_universe", [])
+                    state.symbolic_universe["symbol_universe"].append(sym)
+
     # ---------------------------
     # FINAL DOMAIN 0 COMPLETION CHECK
     # ---------------------------
