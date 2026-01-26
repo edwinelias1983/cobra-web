@@ -182,7 +182,7 @@ def v7_extract_interaction_mode(text: str) -> str | None:
         return "mastery"
 
     return None
-    
+
 class Domain(str, Enum):
     D0  = "D0"
     D0B = "D0B"
@@ -845,7 +845,33 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
     # Set mode
     state.interaction_mode = InteractionMode(mode)
 
-    # Mark complete ONLY if symbol universe exists (V7 HARD RULE)
+    # ---------------------------
+    # V7 OPTION B: EXPLICIT SYMBOL EXTRACTION (FIXED)
+    # ---------------------------
+
+    lines = [l.strip() for l in user_text.splitlines() if l.strip()]
+
+    for line in lines:
+        lower = line.lower()
+
+        if "naturally understand" in lower or "i naturally understand" in lower:
+            parts = line.split("understand", 1)
+
+            if len(parts) == 2:
+                raw = parts[1]
+
+                # split explicitly — no inference
+                candidates = (
+                    raw.replace(" and ", ",")
+                    .split(",")
+                )
+
+                for c in candidates:
+                    sym = c.strip()
+                    if sym:
+                        state.symbolic_universe.setdefault("symbol_universe", [])
+                        state.symbolic_universe["symbol_universe"].append(sym)
+
     symbols = state.symbolic_universe.get("symbol_universe")
 
     if isinstance(symbols, list) and symbols:
