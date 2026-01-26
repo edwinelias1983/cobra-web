@@ -681,13 +681,14 @@ def call_model_with_retry_v7(
             )
 
     # Only D0 logic is allowed here
-    ok, msg = v7_record_domain0_answers(state, prompt)
+    text_prompt = prompt if isinstance(prompt, str) else json.dumps(prompt)
+    ok, msg = v7_record_domain0_answers(state, text_prompt)
     if not ok:
         d0 = v7_domain0_response()
         d0["intent"] = "REPAIR"
         d0["repair_required"] = True
         d0["stability_assessment"] = "UNSTABLE"
-        d0["text"] += "\n\nREPAIR REQUIRED: " + msg
+        d0["text"] += "\n\nREPAIR REQUIRED: " + str(msg)
         return d0
 
     # IMPORTANT: Domain 0 answers recorded successfully (but NOT confirmed)
