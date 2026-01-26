@@ -851,25 +851,22 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
     lines = [l.strip() for l in user_text.splitlines() if l.strip()]
 
     for line in lines:
-        lower = line.lower()
+    l   ower = line.lower()
 
-    if "understand" in lower and ":" in line:
-        parts = line.split(":", 1)
+        if "naturally understand" in lower:
+             # everything AFTER the colon is the symbol list
+            if ":" in line:
+                raw = line.split(":", 1)[1]
+            else:
+                raw = line.split("understand", 1)[1]
 
-        if len(parts) == 2:
-            raw = parts[1]
-
-            candidates = (
-                raw.replace(" and ", ",")
-                   .split(",")
-            )
+            candidates = raw.replace(" and ", ",").split(",")
 
             for c in candidates:
                 sym = c.strip()
                 if sym:
                     state.symbolic_universe.setdefault("symbol_universe", [])
                     state.symbolic_universe["symbol_universe"].append(sym)
-
     # ---------------------------
     # FINAL DOMAIN 0 COMPLETION CHECK
     # ---------------------------
