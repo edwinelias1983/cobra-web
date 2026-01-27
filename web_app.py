@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from v7_domains import compile_domain_prompt
 from enum import Enum
 
 from app import (
@@ -1257,8 +1258,14 @@ def run_cobra(payload: dict):
                 + prompt
             )
 
+        compiled_prompt = compile_domain_prompt(
+            domain=state.current_domain,
+            user_prompt=prompt,
+            symbolic_universe=state.symbolic_universe
+        )
+
         response = call_model_with_retry_v7(
-            prompt=prompt,
+            prompt=compiled_prompt,
             state=state,
             expected_domain=expected_domain,
             expected_phase=expected_phase,
