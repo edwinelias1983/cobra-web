@@ -1017,8 +1017,8 @@ def run_cobra(payload: dict):
                 "repair_required": False,
                 "stability_assessment": "STABLE",
                 "text": "Symbolic universe confirmed. Domain 0 locked.",
-                "symbols_used": confirmed,
-                "symbol_universe": confirmed,
+                "symbol_universe": confirmed["likes"],
+                "symbols_used": confirmed["likes"],
                 "state": {
                     "domain0_complete": True,
                     "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
