@@ -985,8 +985,11 @@ def run_cobra(payload: dict):
         # Call V7 engine
         # ---------------------------
         
-        expected_domain = server_expected_domain(state)
-        
+        # V7 HARD OVERRIDE — Domain 0 always runs until complete
+        if not getattr(state, "domain0_complete", False):
+            expected_domain = Domain.D0
+        else:
+            expected_domain = server_expected_domain(state)
         # -------------------------------------------------
         # PHASE 1 TRANSFER GATE (V7)
         # -------------------------------------------------
