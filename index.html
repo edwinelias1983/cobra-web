@@ -440,11 +440,6 @@ function applyDomainGovernor(data){
   const bar = document.getElementById("chatInputBar");
   const microBox = document.getElementById("microCheckBox");
 
-  // HARD RESET — start from nothing
-  chat.style.display = "none";
-  bar.style.display = "none";
-  microBox.style.display = "none";
-
   if (!data || !data.domain) return;
 
   // D0 QUESTION — system speaks, user listens
