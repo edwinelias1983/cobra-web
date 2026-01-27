@@ -217,34 +217,32 @@ def normalize_symbol_universe(payload: dict) -> list:
 def server_symbol_universe(payload: dict, state: CobraState):
     """
     V7 HARD GUARANTEE:
-    - Domain 0 completion => non-empty symbol universe
-    - After lock, payload is ignored
+    - Domain 0 completion => symbol universe is immutable
+    - Server never recomputes symbols after lock
     """
-    # -------------------------
-    # DOMAIN 0 (UNLOCKED)
-    # -------------------------
-    if not getattr(state, "domain0_complete", False) or reset_symbols:
 
-        symbols = normalize_symbol_universe(payload)
+    # If Domain 0 is complete, ONLY read from state
+    if getattr(state, "domain0_complete", False):
+        su = state.symbolic_universe.get("symbol_universe")
+        if isinstance(su, list) and su:
+            return su
 
-        if symbols:
-            state.symbolic_universe["symbol_universe"] = symbols
-            return symbols
-
-        # Domain 0 attempted but invalid → HARD REPAIR
+        # Impossible state → force repair
+        state.domain0_complete = False
+        state.symbolic_universe = {}
         return None
 
-    # -------------------------
-    # DOMAIN 0 LOCKED
-    # -------------------------
-    su = state.symbolic_universe.get("symbol_universe")
-    if isinstance(su, list) and su:
-        return su
-        
-    # IMPOSSIBLE STATE → FORCE REPAIR
-    state.domain0_complete = False
-    return None
+    # Domain 0 not complete → extract symbols ONCE
+    symbols = normalize_symbol_universe(payload)
 
+    if symbols:
+        state.symbolic_universe = {
+            "symbol_universe": symbols,
+            "domain0_raw": payload,
+        }
+        return symbols
+
+    return None
 
 def enforce_symbol_scope(response: dict, state: CobraState) -> dict:
     """
@@ -1156,39 +1154,6 @@ def run_cobra(payload: dict):
             # Prompt may continue conversation, but not reseed symbols
             pass
 
-        # =====================================================
-        # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (SAFE + ROBUST)
-        # Enforced ONLY after model response exists
-        # =====================================================
-
-        if (
-            getattr(state, "domain0_complete", False)
-            and response.get("domain") == "D0"
-            and not v7_requires_domain0b(state)
-        ):
-            symbols = v7_get_symbol_universe(state)
-
-            if not isinstance(symbols, list) or len(symbols) == 0:
-                state.domain0_complete = False
-                state.symbolic_universe = None
-
-                save_session_state(session_id, state)
-
-                return {
-                    "domain": "D0",
-                    "intent": "REPAIR",
-                    "repair_required": True,
-                    "text": (
-                        "Domain 0 integrity failure. "
-                        "A non-empty symbol universe is required before continuing."
-                    ),
-                    "symbol_universe": [],
-                    "symbols_used": [],
-                    "state": {
-                        "domain0_complete": False,
-                        "domain0b_complete": False,
-                },
-            }
         # =====================================================
         # V7 SERVER-ONLY TRANSITION GUARD
         # =====================================================
