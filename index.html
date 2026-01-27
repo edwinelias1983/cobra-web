@@ -488,6 +488,9 @@ function commitSymbolicUniverseOnce(data){
 function renderCobraResponse(data){
   window.__lastResponse = data;
 
+  if (window.__symbolicUniverseLocked && data?.domain === "D0")
+    console.error("V7 VIOLATION: UI attempted to re-enter Domain 0 after lock.");
+
   // ===============================
   // V7 HARD GATE: DOMAIN 0 REPAIR
   // ===============================
