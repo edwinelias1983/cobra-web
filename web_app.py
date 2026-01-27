@@ -1126,36 +1126,40 @@ def run_cobra(payload: dict):
         if state.domain0_complete:
             # Prompt may continue conversation, but not reseed symbols
             pass
+
         # =====================================================
-        # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (HARD)
+        # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (SAFE + ROBUST)
+        # Enforced ONLY after model response exists
         # =====================================================
 
-        if getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
+        if (
+            getattr(state, "domain0_complete", False)
+            and response.get("domain") == "D0"
+            and not v7_requires_domain0b(state)
+        ):
             symbols = v7_get_symbol_universe(state)
 
             if not isinstance(symbols, list) or len(symbols) == 0:
-                # This state is ILLEGAL in V7 → force repair
                 state.domain0_complete = False
                 state.symbolic_universe = None
 
-            save_session_state(session_id, state)
+                save_session_state(session_id, state)
 
-            return {
-                "domain": "D0",
-                "intent": "REPAIR",
-                "repair_required": True,
-                "text": (
-                    "Domain 0 integrity failure. "
-                    "A non-empty symbol universe is required before continuing."
-                ),
-                "symbol_universe": [],
-                "symbols_used": [],
-                "state": {
-                    "domain0_complete": False,
-                    "domain0b_complete": False,
+                return {
+                    "domain": "D0",
+                    "intent": "REPAIR",
+                    "repair_required": True,
+                    "text": (
+                        "Domain 0 integrity failure. "
+                        "A non-empty symbol universe is required before continuing."
+                    ),
+                    "symbol_universe": [],
+                    "symbols_used": [],
+                    "state": {
+                        "domain0_complete": False,
+                        "domain0b_complete": False,
                 },
             }
-
         # =====================================================
         # V7 SERVER-ONLY TRANSITION GUARD
         # =====================================================
@@ -1165,7 +1169,7 @@ def run_cobra(payload: dict):
 
         # SAFE: response now guaranteed to exist
         response = enforce_symbol_scope(response, state)
-        
+
         ## ---------------------------
         # Call V7 engine
         # ---------------------------
