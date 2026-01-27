@@ -911,6 +911,11 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        print("=== SESSION LOAD CHECK ===")
+        print("SESSION ID:", session_id)
+        print("STATE DICT:", state.__dict__)
+        print("==========================")
+
         # =====================================================
         # IRONCLAD V7 ASSERT — Domain 0 can never be "complete"
         # unless the symbol universe is a non-empty list[str]
