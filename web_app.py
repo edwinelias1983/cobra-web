@@ -923,7 +923,7 @@ def run_cobra(payload: dict):
                     state.symbolic_universe["symbol_universe"] = confirmed
                     state.domain0_complete = True
 
-            save_session_state(session_id, state)
+                save_session_state(session_id, state)
 
             except Exception as e:
                 logger.exception("V7 DOMAIN 0 COMMIT FAILURE")
