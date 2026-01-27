@@ -882,7 +882,10 @@ def run_cobra(payload: dict):
         # =====================================================
         # V7 HARD INTERCEPT — D0_CONFIRM (server-owned, before any prompt building)
         # =====================================================
+        # =====================================================
         _raw_prompt = payload.get("prompt")
+
+        _confirm_payload = None
 
         # Accept both:
         # 1) prompt: { intent: "D0_CONFIRM", confirmed_symbols: [...] }
@@ -892,10 +895,8 @@ def run_cobra(payload: dict):
         elif isinstance(_raw_prompt, str):
             try:
                 _confirm_payload = json.loads(_raw_prompt)
-        except Exception:
-            _confirm_payload = None
-        else:
-            _confirm_payload = None
+            except Exception:
+                _confirm_payload = None
 
         if isinstance(_confirm_payload, dict) and _confirm_payload.get("intent") == "D0_CONFIRM":
             confirmed = _confirm_payload.get("confirmed_symbols")
@@ -914,11 +915,11 @@ def run_cobra(payload: dict):
                 },
             }
 
-        # 🔒 LOCK DOMAIN 0 (server-owned)
-        if getattr(state, "symbolic_universe", None) is None or not isinstance(state.symbolic_universe, dict):
-            state.symbolic_universe = {}
-        state.symbolic_universe["symbol_universe"] = confirmed
-        state.domain0_complete = True
+            # 🔒 LOCK DOMAIN 0 (server-owned)
+            if getattr(state, "symbolic_universe", None) is None or not isinstance(state.symbolic_universe, dict):
+                state.symbolic_universe = {}
+            state.symbolic_universe["symbol_universe"] = confirmed
+            state.domain0_complete = True
 
     save_session_state(session_id, state)
 
