@@ -921,6 +921,15 @@ def run_cobra(payload: dict):
         state = load_session_state(session_id)
 
         # -----------------------------------------
+        # OPTIONAL V7 ASSERT — DOMAIN 0 NON-REGRESSION
+        # -----------------------------------------
+        if getattr(state, "domain0_complete", False):
+            symbols = v7_get_symbol_universe(state)
+            assert isinstance(symbols, list) and len(symbols) > 0, (
+                "V7 VIOLATION: Domain 0 complete but symbol universe empty"
+        )
+
+        # -----------------------------------------
         # V7 SYMBOL RESET (SERVER-OWNED, SAFE)
         # -----------------------------------------
         reset_symbols = (
