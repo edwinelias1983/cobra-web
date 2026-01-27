@@ -919,25 +919,7 @@ def run_cobra(payload: dict):
         print("SESSION_ID USED:", session_id)
 
         state = load_session_state(session_id)
-
-        # =====================================================
-        # V7 STATUS — READ-ONLY SYSTEM SNAPSHOT (NO MUTATION)
-        # =====================================================
-        if payload.get("intent") == "STATUS" or payload.get("prompt") == "status":
-            return {
-                "domain": "SYSTEM",
-                "intent": "STATUS",
-                "text": "Current system state snapshot.",
-                "state": {
-                    "domain0_complete": bool(getattr(state, "domain0_complete", False)),
-                    "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-                    "phase2_active": bool(getattr(state, "phase2_active", False)),
-                    "awaiting_micro_check": bool(getattr(state, "awaiting_micro_check", False)),
-                    "current_domain": getattr(state, "current_domain", None),
-                },
-                "symbol_universe": getattr(state, "symbolic_universe", {}),
-            }
-
+        
         # =====================================================
         # V7 HARD LOCK — DOMAIN 0 IS WRITE-ONCE (IMMUTABLE)
         # =====================================================
