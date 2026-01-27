@@ -880,54 +880,41 @@ def run_cobra(payload: dict):
         state = load_session_state(session_id)
 
         # =====================================================
-        # V7 HARD INTERCEPT — D0_CONFIRM (server-owned, before any prompt building)
+        # V7 DOMAIN 0 — EXPLICIT SERVER CONFIRMATION (DETERMINISTIC)
         # =====================================================
-        # =====================================================
-        _raw_prompt = payload.get("prompt")
 
-        _confirm_payload = None
+        want = payload.get("want_to_understand")
+        likes = payload.get("likes")
+        mode = payload.get("interaction_mode")
 
-        # Accept both:
-        # 1) prompt: { intent: "D0_CONFIRM", confirmed_symbols: [...] }
-        # 2) prompt: JSON.stringify({ intent: "...", confirmed_symbols: [...] })
-        if isinstance(_raw_prompt, dict):
-            _confirm_payload = _raw_prompt
-        elif isinstance(_raw_prompt, str):
-            try:
-                _confirm_payload = json.loads(_raw_prompt)
-            except Exception:
-                _confirm_payload = None
+        if isinstance(likes, str):
+            likes = [s.strip() for s in likes.split(",") if s.strip()]
 
-        if isinstance(_confirm_payload, dict) and _confirm_payload.get("intent") == "D0_CONFIRM":
-            confirmed = _confirm_payload.get("confirmed_symbols")
+        domain0_ready = bool(
+            want and
+            isinstance(likes, list) and len(likes) > 0 and
+            mode in ("learn", "adventure", "mastery")
+        )
 
-            if not isinstance(confirmed, list) or not confirmed:
-                return {
-                    "domain": "D0",
-                    "intent": "REPAIR",
-                    "repair_required": True,
-                    "text": "D0_CONFIRM requires confirmed_symbols as a non-empty list.",
-                    "symbols_used": [],
-                    "symbol_universe": [],
-                    "state": {
-                        "domain0_complete": False,
-                        "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-                },
+        if domain0_ready:
+            confirmed = {
+                "want_to_understand": want,
+                "likes": likes,
+                "interaction_mode": mode
             }
+        else:
+            confirmed = None
 
-            # 🔒 LOCK DOMAIN 0 (server-owned)
-            try:
-            # 🔒 LOCK DOMAIN 0 (server-owned)
-                if getattr(state, "symbolic_universe", None) is None or not isinstance(state.symbolic_universe, dict):
-                    state.symbolic_universe = {}
-                    state.symbolic_universe["symbol_universe"] = confirmed
-                    state.domain0_complete = True
 
-                save_session_state(session_id, state)
+        if confirmed is not None:
+            state.symbolic_universe = {
+                "symbol_universe": confirmed,
+                "domain0_raw": confirmed
+        }
+            state.domain0_complete = True
 
-            except Exception as e:
-                logger.exception("V7 DOMAIN 0 COMMIT FAILURE")
-                raise
+            save_session_state(session_id, state)
+
             return {
                 "domain": "D0",
                 "phase": "PHASE_1",
@@ -941,7 +928,7 @@ def run_cobra(payload: dict):
                 "state": {
                     "domain0_complete": True,
                     "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-                    "phase2_active": bool(getattr(state, "phase2_active", False)),
+                    "phase2_active": bool(getattr(state, "phase2_active", False),
                 },
                 "next_domain_recommendation": "D0B",
                 "media_suggestions": [],
@@ -951,13 +938,6 @@ def run_cobra(payload: dict):
                     "expected_response_type": "conceptual",
                 },
             }
-
-        print("=== COBRA STATE DEBUG ===")
-        print("SESSION_ID:", session_id)
-        print("STATE_OBJECT_ID:", id(state))
-        print("STATE.domain0_complete:", getattr(state, "domain0_complete", None))
-        print("STATE.symbolic_universe:", getattr(state, "symbolic_universe", None))
-        print("=========================")
 
         # =====================================================
         # V7 INVARIANT (MANDATORY): symbolic_universe MUST be dict
