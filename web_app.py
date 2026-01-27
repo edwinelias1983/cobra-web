@@ -880,64 +880,101 @@ def run_cobra(payload: dict):
         state = load_session_state(session_id)
 
         # =====================================================
+        # V7 HARD LOCK — DOMAIN 0 IS WRITE-ONCE (IMMUTABLE)
+        # =====================================================
+        if getattr(state, "domain0_complete", False):
+            # Strip any attempt to reseed Domain 0 after lock
+            payload.pop("want_to_understand", None)
+            payload.pop("likes", None)
+            payload.pop("interaction_mode", None)
+
+        # =====================================================
         # V7 DOMAIN 0 — EXPLICIT SERVER CONFIRMATION (DETERMINISTIC)
         # =====================================================
+        if not getattr(state, "domain0_complete", False):
 
-        want = payload.get("want_to_understand")
-        likes = payload.get("likes")
-        mode = payload.get("interaction_mode")
+            want = payload.get("want_to_understand")
+            likes = payload.get("likes")
+            mode = payload.get("interaction_mode")
 
-        if isinstance(likes, str):
-            likes = [s.strip() for s in likes.split(",") if s.strip()]
+            if isinstance(likes, str):
+                likes = [s.strip() for s in likes.split(",") if s.strip()]
 
-        domain0_ready = bool(
-            want and
-            isinstance(likes, list) and len(likes) > 0 and
-            mode in ("learn", "adventure", "mastery")
-        )
+            domain0_ready = bool(
+                want and
+                isinstance(likes, list) and len(likes) > 0 and
+                mode in ("learn", "adventure", "mastery")
+            )
 
-        if domain0_ready:
-            confirmed = {
-                "want_to_understand": want,
-                "likes": likes,
-                "interaction_mode": mode
-            }
-        else:
-            confirmed = None
+            if domain0_ready:
+                confirmed = {
+                    "want_to_understand": want,
+                    "likes": likes,
+                    "interaction_mode": mode
+                }
+            else:
+                confirmed = None
 
+            if not domain0_ready:
+                return {
+                    "domain": "D0",
+                    "phase": "PHASE_1",
+                    "intent": "REPAIR",
+                    "repair_required": True,
+                    "stability_assessment": "UNSTABLE",
+                    "text": (
+                        "Domain 0 incomplete. You must provide:\n"
+                        "- what you want to understand\n"
+                        "- what you naturally understand or like\n"
+                        "- an interaction mode"
+                    ),
+                    "symbols_used": [],
+                    "symbol_universe": [],
+                    "state": {
+                        "domain0_complete": False,
+                        "domain0b_complete": False,
+                        "phase2_active": False,
+                    },
+                    "next_domain_recommendation": "D0",
+                    "media_suggestions": [],
+                    "payload": {},
+                    "micro_check": {
+                        "prompt": "Answer the questions above.",
+                        "expected_response_type": "conceptual",
+                    },
+                }
 
-        if confirmed is not None:
+            # ONLY REACHED IF domain0_ready == True
             state.symbolic_universe = {
                 "symbol_universe": confirmed,
-                "domain0_raw": confirmed
+                "domain0_raw": confirmed,
             }
-            state.domain0_complete = True
 
-            save_session_state(session_id, state)
+                save_session_state(session_id, state)
 
-            return {
-                "domain": "D0",
-                "phase": "PHASE_1",
-                "intent": "CONFIRMATION",
-                "introduced_new_symbols": False,
-                "repair_required": False,
-                "stability_assessment": "STABLE",
-                "text": "Symbolic universe confirmed. Domain 0 locked.",
-                "symbols_used": confirmed,
-                "symbol_universe": confirmed,
-                "state": {
-                    "domain0_complete": True,
-                    "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-                    "phase2_active": bool(getattr(state, "phase2_active", False)),
-                },
-                "next_domain_recommendation": "D0B",
-                "media_suggestions": [],
-                "payload": {},
-                "micro_check": {
-                    "prompt": "Proceeding to Domain 0B.",
-                    "expected_response_type": "conceptual",
-                },
-            }
+                return {
+                    "domain": "D0",
+                    "phase": "PHASE_1",
+                    "intent": "CONFIRMATION",
+                    "introduced_new_symbols": False,
+                    "repair_required": False,
+                    "stability_assessment": "STABLE",
+                    "text": "Symbolic universe confirmed. Domain 0 locked.",
+                    "symbols_used": confirmed,
+                    "symbol_universe": confirmed,
+                    "state": {
+                        "domain0_complete": True,
+                        "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
+                        "phase2_active": bool(getattr(state, "phase2_active", False)),
+                    },
+                    "next_domain_recommendation": "D0B",
+                    "media_suggestions": [],
+                    "payload": {},
+                    "micro_check": {
+                        "prompt": "Proceeding to Domain 0B.",
+                        "expected_response_type": "conceptual",
+                    },
+                }
 
         # =====================================================
         # V7 INVARIANT (MANDATORY): symbolic_universe MUST be dict
@@ -999,6 +1036,7 @@ def run_cobra(payload: dict):
             payload.pop("interaction_mode", None)
             payload.pop("want_to_understand", None)
             payload.pop("likes", None)
+            payload.setdefault("prompt", "")
 
         if not v7_requires_domain0b(state):
             payload.pop("auditory_response", None)
@@ -1347,6 +1385,10 @@ def run_cobra(payload: dict):
             "phase2_stress_test": bool(payload.get("phase2_stress_test")),
             "phase2_stress_mode": payload.get("phase2_stress_mode"),
         }
+
+        symbols = v7_get_symbol_universe(state)
+        if isinstance(symbols, list):
+            response["symbol_universe"] = symbols
 
         intro_lines = []
 
