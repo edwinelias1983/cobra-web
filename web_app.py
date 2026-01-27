@@ -1003,8 +1003,8 @@ def run_cobra(payload: dict):
 
             # ONLY REACHED IF domain0_ready == True
             state.symbolic_universe = {
-                "symbol_universe": confirmed,
-                "domain0_raw": confirmed,
+            "symbol_universe": confirmed["likes"],   # LIST[str]
+            "domain0_raw": confirmed                 # full record preserved
             }
             state.domain0_complete = True
             save_session_state(session_id, state)
