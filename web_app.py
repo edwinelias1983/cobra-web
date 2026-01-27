@@ -220,9 +220,6 @@ def server_symbol_universe(payload: dict, state: CobraState):
     - Domain 0 completion => non-empty symbol universe
     - After lock, payload is ignored
     """
-
-    reset_symbols = bool(payload.get("reset_symbols"))
-
     # -------------------------
     # DOMAIN 0 (UNLOCKED)
     # -------------------------
@@ -896,7 +893,10 @@ def run_cobra(payload: dict):
     payload = normalized
 
     # Optional: allow caller to explicitly reseed the symbol universe
-    reset_symbols = bool(payload.get("reset_symbols"))
+    reset_symbols = (
+        bool(payload.get("reset_symbols"))
+        and not getattr(state, "domain0_complete", False)
+    )
 
     # V7 HARD RULE: client may never control domain or phase
     payload.pop("domain", None)
@@ -920,6 +920,13 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        # -----------------------------------------
+        # V7 SYMBOL RESET (SERVER-OWNED, SAFE)
+        # -----------------------------------------
+        reset_symbols = (
+            bool(payload.get("reset_symbols"))
+            and not getattr(state, "domain0_complete", False)
+        )
         # =====================================================
         # V7 HARD LOCK — DOMAIN 0 IS WRITE-ONCE (IMMUTABLE)
         # =====================================================
