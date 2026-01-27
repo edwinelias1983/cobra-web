@@ -1057,6 +1057,15 @@ def run_cobra(payload: dict):
             payload.setdefault("prompt", "")
 
         # =====================================================
+        # V7 DOMAIN 0B — RECORD INTERACTION CONSTRAINTS
+        # =====================================================
+        if v7_requires_domain0b(state) and payload.get("micro_response"):
+            v7_record_domain0b_answer(
+                state=state,
+                response=payload["micro_response"]
+            )
+            save_session_state(session_id, state)
+        # =====================================================
         # V7 HARD GATE — DOMAIN 0B REQUIRED BEFORE DOMAIN 1
         # =====================================================
         if v7_requires_domain0b(state):
@@ -1088,22 +1097,42 @@ def run_cobra(payload: dict):
                 state.awaiting_micro_check = False
 
         # =====================================================
-        # V7 DOMAIN 0B — RECORD INTERACTION CONSTRAINTS
-        # =====================================================
-        if v7_requires_domain0b(state) and payload.get("micro_response"):
-            v7_record_domain0b_answer(
-                state=state,
-                response=payload["micro_response"]
-            )
-            save_session_state(session_id, state)
-
-        # =====================================================
         # V7 HARD GUARD — prevent Domain 0 / 0B reseeding via prompt
         # =====================================================
         if state.domain0_complete:
             # Prompt may continue conversation, but not reseed symbols
             pass
+        # =====================================================
+        # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (HARD)
+        # =====================================================
 
+        if getattr(state, "domain0_complete", False):
+            symbols = v7_get_symbol_universe(state)
+
+            if not isinstance(symbols, list) or len(symbols) == 0:
+                # This state is ILLEGAL in V7 → force repair
+                state.domain0_complete = False
+                state.symbolic_universe = None
+
+            save_session_state(session_id, state)
+
+            return {
+                "domain": "D0",
+                "intent": "REPAIR",
+                "repair_required": True,
+                "text": (
+                    "Domain 0 integrity failure. "
+                    "A non-empty symbol universe is required before continuing."
+                ),
+                "symbol_universe": [],
+                "symbols_used": [],
+                "state": {
+                    "domain0_complete": False,
+                    "domain0b_complete": False,
+                },
+            }
+
+        response = enforce_symbol_scope(response, state)
         ## ---------------------------
         # Call V7 engine
         # ---------------------------
@@ -1258,38 +1287,6 @@ def run_cobra(payload: dict):
                 f"V7 violation: response['payload'] must be dict, "
                 f"got {type(response.get('payload'))}"
         )
-
-        # =====================================================
-        # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (HARD)
-        # =====================================================
-
-        if getattr(state, "domain0_complete", False):
-            symbols = v7_get_symbol_universe(state)
-
-            if not isinstance(symbols, list) or len(symbols) == 0:
-                # This state is ILLEGAL in V7 → force repair
-                state.domain0_complete = False
-                state.symbolic_universe = None
-
-            save_session_state(session_id, state)
-
-            return {
-                "domain": "D0",
-                "intent": "REPAIR",
-                "repair_required": True,
-                "text": (
-                    "Domain 0 integrity failure. "
-                    "A non-empty symbol universe is required before continuing."
-                ),
-                "symbol_universe": [],
-                "symbols_used": [],
-                "state": {
-                    "domain0_complete": False,
-                    "domain0b_complete": False,
-                },
-            }
-
-        response = enforce_symbol_scope(response, state)
 
         # =====================================================
         # V7 GUARANTEE — symbols_used must never be empty
