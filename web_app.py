@@ -949,8 +949,8 @@ def run_cobra(payload: dict):
                 "symbol_universe": confirmed,
                 "domain0_raw": confirmed,
             }
-
-                save_session_state(session_id, state)
+            state.domain0_complete = True
+            save_session_state(session_id, state)
 
                 return {
                     "domain": "D0",
