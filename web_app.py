@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from enum import Enum
-from app import Domain
 
 from app import (
     Domain,
@@ -890,12 +889,6 @@ def run_cobra(payload: dict):
     # Use normalized payload from this point on
     payload = normalized
 
-    # Optional: allow caller to explicitly reseed the symbol universe
-    reset_symbols = (
-        bool(payload.get("reset_symbols"))
-        and not getattr(state, "domain0_complete", False)
-    )
-
     # V7 HARD RULE: client may never control domain or phase
     payload.pop("domain", None)
     payload.pop("phase", None)
@@ -1116,6 +1109,18 @@ def run_cobra(payload: dict):
             )
 
             save_session_state(session_id, state)
+        
+        # =====================================================
+        # V7 EXIT — DOMAIN 0B JUST COMPLETED
+        # =====================================================
+        if (
+            payload.get("micro_response")
+            and getattr(state, "domain0b_complete", False)
+        ):
+            # Stop Domain 0B loop
+            state.awaiting_micro_check = False
+            save_session_state(session_id, state)
+            # DO NOT return here — fall through to model (Domain 1)
         # =====================================================
         # V7 HARD GATE — DOMAIN 0B REQUIRED BEFORE DOMAIN 1
         # =====================================================
@@ -1165,16 +1170,6 @@ def run_cobra(payload: dict):
         if state.domain0_complete:
             # Prompt may continue conversation, but not reseed symbols
             pass
-
-        # =====================================================
-        # V7 SERVER-ONLY TRANSITION GUARD
-        # =====================================================
-        if "response" not in locals():
-            save_session_state(session_id, state)
-            return v7_domain0b_response(state)
-
-        # SAFE: response now guaranteed to exist
-        response = enforce_symbol_scope(response, state)
 
         ## ---------------------------
         # Call V7 engine
@@ -1266,6 +1261,10 @@ def run_cobra(payload: dict):
             expected_phase=expected_phase,
             symbol_universe=symbol_universe,
         )
+
+        # V7 HARD SYMBOL SCOPE ENFORCEMENT (POST-MODEL ONLY)
+        response = enforce_symbol_scope(response, state)
+        
         # =====================================================
         #  FIX 4 — HARD RESPONSE ENVELOPE FREEZE (V7)
         # =====================================================
