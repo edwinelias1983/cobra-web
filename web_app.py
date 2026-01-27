@@ -1038,10 +1038,14 @@ def run_cobra(payload: dict):
             payload.pop("likes", None)
             payload.setdefault("prompt", "")
 
-        if not v7_requires_domain0b(state):
-            payload.pop("auditory_response", None)
-    
-        
+        # =====================================================
+        # V7 HARD GATE — DOMAIN 0B REQUIRED BEFORE DOMAIN 1
+        # =====================================================
+        if v7_requires_domain0b(state):
+            response = v7_domain0b_response(state)
+            save_session_state(session_id, state)
+            return response
+
         # ---------------------------
         # Build prompt
         # ---------------------------
@@ -1066,6 +1070,16 @@ def run_cobra(payload: dict):
                 state.awaiting_micro_check = False
 
         # =====================================================
+        # V7 DOMAIN 0B — RECORD INTERACTION CONSTRAINTS
+        # =====================================================
+        if v7_requires_domain0b(state) and payload.get("micro_response"):
+            v7_record_domain0b_answer(
+                state=state,
+                response=payload["micro_response"]
+            )
+            save_session_state(session_id, state)
+
+        # =====================================================
         # V7 HARD GUARD — prevent Domain 0 / 0B reseeding via prompt
         # =====================================================
         if state.domain0_complete:
@@ -1079,8 +1093,11 @@ def run_cobra(payload: dict):
         # V7 HARD OVERRIDE — Domain 0 always runs until complete
         if not getattr(state, "domain0_complete", False):
             expected_domain = Domain.D0
+        elif v7_requires_domain0b(state):
+            expected_domain = Domain.D0B
         else:
             expected_domain = server_expected_domain(state)
+
         # -------------------------------------------------
         # PHASE 1 TRANSFER GATE (V7)
         # -------------------------------------------------
