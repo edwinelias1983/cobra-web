@@ -928,29 +928,29 @@ def run_cobra(payload: dict):
             except Exception as e:
                 logger.exception("V7 DOMAIN 0 COMMIT FAILURE")
                 raise
-    return {
-        "domain": "D0",
-        "phase": "PHASE_1",
-        "intent": "CONFIRMATION",
-        "introduced_new_symbols": False,
-        "repair_required": False,
-        "stability_assessment": "STABLE",
-        "text": "Symbolic universe confirmed. Domain 0 locked.",
-        "symbols_used": confirmed,
-        "symbol_universe": confirmed,
-        "state": {
-            "domain0_complete": True,
-            "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-            "phase2_active": bool(getattr(state, "phase2_active", False)),
-        },
-        "next_domain_recommendation": "D0B",
-        "media_suggestions": [],
-        "payload": {},
-        "micro_check": {
-            "prompt": "Proceeding to Domain 0B.",
-            "expected_response_type": "conceptual",
-        },
-    }
+            return {
+                "domain": "D0",
+                "phase": "PHASE_1",
+                "intent": "CONFIRMATION",
+                "introduced_new_symbols": False,
+                "repair_required": False,
+                "stability_assessment": "STABLE",
+                "text": "Symbolic universe confirmed. Domain 0 locked.",
+                "symbols_used": confirmed,
+                "symbol_universe": confirmed,
+                "state": {
+                    "domain0_complete": True,
+                    "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
+                    "phase2_active": bool(getattr(state, "phase2_active", False)),
+                },
+                "next_domain_recommendation": "D0B",
+                "media_suggestions": [],
+                "payload": {},
+                "micro_check": {
+                    "prompt": "Proceeding to Domain 0B.",
+                    "expected_response_type": "conceptual",
+                },
+            }
 
         print("=== COBRA STATE DEBUG ===")
         print("SESSION_ID:", session_id)
