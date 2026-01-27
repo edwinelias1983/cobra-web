@@ -589,9 +589,12 @@ async function begin(){
     session_id: getSessionId(),
     interaction_mode: mode,
     want_to_understand: q1,
-    likes: q2,
-    auditory_response: voice,
-    prompt: `Voice: ${voice}`
+    likes: q2.split(",").map(s => s.trim()),
+    const payload = {
+      session_id: getSessionId(),
+      interaction_mode: mode,
+      want_to_understand: q1,
+      likes: q2.split(",").map(s => s.trim())
   };
 
   /* ADD THIS LINE */
