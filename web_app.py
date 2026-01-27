@@ -879,6 +879,13 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        print("=== COBRA STATE DEBUG ===")
+        print("SESSION_ID:", session_id)
+        print("STATE_OBJECT_ID:", id(state))
+        print("STATE.domain0_complete:", getattr(state, "domain0_complete", None))
+        print("STATE.symbolic_universe:", getattr(state, "symbolic_universe", None))
+        print("=========================")
+
         # =====================================================
         # V7 INVARIANT (MANDATORY): symbolic_universe MUST be dict
         # app.py uses .setdefault(...) on symbolic_universe
