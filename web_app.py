@@ -920,6 +920,16 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        print("=== DEBUG SNAPSHOT ===")
+        print("domain0_complete:", getattr(state, "domain0_complete", None))
+        print("symbolic_universe (raw):", state.symbolic_universe)
+        if isinstance(state.symbolic_universe, dict):
+            print("symbol_universe['symbol_universe']:",
+                state.symbolic_universe.get("symbol_universe"),
+                "type:",
+                type(state.symbolic_universe.get("symbol_universe")))
+        print("======================")
+
         # -----------------------------------------
         # OPTIONAL V7 ASSERT — DOMAIN 0 NON-REGRESSION
         # -----------------------------------------
