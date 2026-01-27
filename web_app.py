@@ -1156,7 +1156,16 @@ def run_cobra(payload: dict):
                 },
             }
 
+        # =====================================================
+        # V7 SERVER-ONLY TRANSITION GUARD
+        # =====================================================
+        if "response" not in locals():
+            save_session_state(session_id, state)
+            return v7_domain0b_response(state)
+
+        # SAFE: response now guaranteed to exist
         response = enforce_symbol_scope(response, state)
+        
         ## ---------------------------
         # Call V7 engine
         # ---------------------------
