@@ -919,9 +919,9 @@ def run_cobra(payload: dict):
             try:
             # 🔒 LOCK DOMAIN 0 (server-owned)
                 if getattr(state, "symbolic_universe", None) is None or not isinstance(state.symbolic_universe, dict):
-                state.symbolic_universe = {}
-                state.symbolic_universe["symbol_universe"] = confirmed
-                state.domain0_complete = True
+                    state.symbolic_universe = {}
+                    state.symbolic_universe["symbol_universe"] = confirmed
+                    state.domain0_complete = True
 
             save_session_state(session_id, state)
 
