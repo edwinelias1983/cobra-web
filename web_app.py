@@ -814,6 +814,47 @@ def root():
 def run_cobra(payload: dict):
 
     # =====================================================
+    # V7 STATUS — READ-ONLY SYSTEM SNAPSHOT (ABSOLUTE BYPASS)
+    # Must run before ANY payload normalization, mutation,
+    # domain gates, phase logic, or model calls.
+    # =====================================================
+    is_status = (payload.get("intent") == "STATUS") or (payload.get("prompt") == "status")
+    raw_session_id = payload.get("session_id")
+
+    # If STATUS is called with no session_id, return a clean empty snapshot (NO mutation).
+    if is_status and not raw_session_id:
+        return {
+            "domain": "SYSTEM",
+            "intent": "STATUS",
+            "text": "Current system state snapshot (no session loaded).",
+            "state": {
+                "domain0_complete": False,
+                "domain0b_complete": False,
+                "phase2_active": False,
+                "awaiting_micro_check": False,
+                "current_domain": None,
+            },
+            "symbol_universe": {},
+        }
+
+    # If STATUS has a session_id, load state_req and return snapshot (NO mutation).
+    if is_status and raw_session_id:
+        state_req = load_session_state(raw_session_id)
+        return {
+            "domain": "SYSTEM",
+            "intent": "STATUS",
+            "text": "Current system state snapshot.",
+            "state": {
+                "domain0_complete": bool(getattr(state_req, "domain0_complete", False)),
+                "domain0b_complete": bool(getattr(state_req, "domain0b_complete", False)),
+                "phase2_active": bool(getattr(state_req, "phase2_active", False)),
+                "awaiting_micro_check": bool(getattr(state_req, "awaiting_micro_check", False)),
+                "current_domain": getattr(state_req, "current_domain", None),
+            },
+            "symbol_universe": getattr(state_req, "symbolic_universe", {}),
+        }
+
+    # =====================================================
     # PAYLOAD NORMALIZATION
     # =====================================================
 
