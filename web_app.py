@@ -1124,6 +1124,18 @@ def run_cobra(payload: dict):
             save_session_state(session_id, state)
             return response
 
+        # =====================================================
+        # V7 TRANSITION — DOMAIN 0B COMPLETE → PROCEED
+        # =====================================================
+        if (
+            not v7_requires_domain0b(state)
+            and payload.get("micro_response")
+        ):
+            # Clear any lingering micro-check flags
+            state.awaiting_micro_check = False
+            save_session_state(session_id, state)
+            # Fall through to model call (Domain 1)
+
         # ---------------------------
         # Build prompt
         # ---------------------------
