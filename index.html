@@ -584,12 +584,6 @@ async function begin(){
   if (staticNote) staticNote.style.display = "none";
 
   document.getElementById("thinkingIndicator").style.display = "block";
-
-  const payload = {
-    session_id: getSessionId(),
-    interaction_mode: mode,
-    want_to_understand: q1,
-    likes: q2.split(",").map(s => s.trim()),
     const payload = {
       session_id: getSessionId(),
       interaction_mode: mode,
