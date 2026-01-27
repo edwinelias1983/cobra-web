@@ -1,8 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from v7_domains import compile_domain_prompt
 from enum import Enum
+from v7_domains import (
+    compile_domain_prompt,
+    validate_domain_output,
+    DomainViolation,
+)
 
 from app import (
     Domain,
@@ -50,6 +54,8 @@ DB_PATH = Path("cobra_data.sqlite")
 
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
+
+        # Normal interaction logging (unchanged)
         conn.execute("""
         CREATE TABLE IF NOT EXISTS interactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +65,8 @@ def init_db():
             response TEXT
         )
         """)
+
+        # Session state storage (unchanged)
         conn.execute("""
         CREATE TABLE IF NOT EXISTS cobra_sessions (
             session_id TEXT PRIMARY KEY,
@@ -66,6 +74,22 @@ def init_db():
             updated_ts REAL
         )
         """)
+
+        # 🔒 V7 Phase-B Violation Log (NEW — DO NOT MERGE)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS violations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts REAL,
+            session_id TEXT,
+            domain TEXT,
+            phase TEXT,
+            expected_domain TEXT,
+            payload_hash TEXT,
+            violation_json TEXT,
+            response_json TEXT
+        )
+        """)
+
         conn.commit()
 
 init_db()
@@ -86,7 +110,41 @@ def log_interaction(payload, response_obj):
             (time.time(), payload_hash, payload_json, response_json),
         )
         conn.commit()
+def log_violation(
+    *,
+    session_id: str,
+    payload: dict,
+    domain: str,
+    phase: str,
+    expected_domain: str,
+    violation_obj: dict,
+    response_obj: dict,
+):
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    response_json = json.dumps(response_obj, ensure_ascii=False)
+    violation_json = json.dumps(violation_obj, ensure_ascii=False)
 
+    payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO violations
+            (ts, session_id, domain, phase, expected_domain, payload_hash, violation_json, response_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                time.time(),
+                session_id,
+                domain,
+                phase,
+                expected_domain,
+                payload_hash,
+                violation_json,
+                response_json,
+            ),
+        )
+        conn.commit()
 # ============================================================
 # SESSION STATE HELPERS
 # ============================================================
@@ -912,6 +970,48 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        # ===============================
+        # V7 DOMAIN TRANSITION AUTHORITY
+        # ===============================
+
+        def commit_domain_transition(state, trigger_type):
+
+            allowed = {
+                "D0": ["D0B"],
+                "D0B": ["D1"],
+                "D1": ["D2"],
+                "D2": ["D2B"],
+                "D2B": ["D3"],
+                "D3": ["D3B"],
+                "D3B": ["D4"],
+                "D4": ["D5"],
+            }
+
+            if not getattr(state, "next_domain_recommendation", None):
+                return state
+
+            current = (
+                state.current_domain.value
+                if isinstance(state.current_domain, Domain)
+                else state.current_domain
+            )
+
+            target = state.next_domain_recommendation
+
+            if target not in allowed.get(current, []):
+                return state
+
+            # D0B → D1 requires PROMPT (not micro)
+            if current == "D0B" and trigger_type != "prompt":
+                return state
+
+            state.current_domain = Domain(target)
+            state.next_domain_recommendation = None
+            return state
+
+        trigger_type = "micro" if payload.get("micro_response") else "prompt"
+        state = commit_domain_transition(state, trigger_type)
+
         # =====================================================
         # IRONCLAD V7 ASSERT — Domain 0 can never be "complete"
         # unless the symbol universe is a non-empty list[str]
@@ -1274,6 +1374,106 @@ def run_cobra(payload: dict):
 
         # V7 HARD SYMBOL SCOPE ENFORCEMENT (POST-MODEL ONLY)
         response = enforce_symbol_scope(response, state)
+
+
+        # =====================================================
+        # V7 PHASE-B OUTPUT VALIDATION (HARD)
+        # =====================================================
+
+        try:
+            validate_domain_output(response.get("domain"), response)
+
+        except DomainViolation as dv:
+
+            log_domain_metric(
+                session_id=session_id,
+                domain=response.get("domain"),
+                metric_type="violation_detected",
+            )
+
+            # ---- Phase B: log violation ----
+            violation_obj = dv.args[0] if dv.args else {
+                "domain": response.get("domain"),
+                "violations": ["unknown"]
+            }
+
+            log_violation(
+                session_id=session_id,
+                payload=payload,
+                domain=response.get("domain"),
+                phase=expected_phase,
+                expected_domain=(
+                    expected_domain.value
+                    if hasattr(expected_domain, "value")
+                    else str(expected_domain)
+                ),
+                violation_obj=violation_obj,
+                response_obj=response,
+            )
+
+            # ---- Phase C: single auto-repair attempt ----
+            if not getattr(state, "phase_c_attempted", False):
+
+                log_domain_metric(
+                    session_id=session_id,
+                    domain=response.get("domain"),
+                    metric_type="repair_attempted",
+                )
+
+                state.phase_c_attempted = True
+                save_session_state(session_id, state)
+
+                repair_prompt = domain_repair_prompt(
+                    response.get("domain"),
+                    violation_obj
+                )
+
+                repaired_response = call_model_with_retry_v7(
+                    prompt=repair_prompt,
+                    state=state,
+                    expected_domain=expected_domain,
+                    expected_phase=expected_phase,
+                    symbol_universe=symbol_universe,
+                )
+
+                repaired_response = enforce_symbol_scope(repaired_response, state)
+
+                # Re-validate repaired output
+                validate_domain_output(repaired_response.get("domain"), repaired_response)
+
+                log_domain_metric(
+                    session_id=session_id,
+                    domain=repaired_response.get("domain"),
+                    metric_type="repair_succeeded",
+                )
+
+                response = repaired_response
+
+            else:
+                # ---- Hard stop after one failed repair ----
+
+                log_domain_metric(
+                    session_id=session_id,
+                    domain=response.get("domain"),
+                    metric_type="hard_stop",
+                )
+                # ---- Hard stop after one failed repair ----
+                save_session_state(session_id, state)
+
+                return {
+                    "domain": response.get("domain"),
+                    "intent": "DOMAIN_VIOLATION",
+                    "stability_assessment": "UNSTABLE",
+                    "text": "The response violated the rules of this domain and could not be repaired.",
+                    "violation_report": violation_obj,
+                    "symbols_used": response.get("symbols_used", []),
+                    "symbol_universe": v7_get_symbol_universe(state),
+                    "state": {
+                        "domain0_complete": state.domain0_complete,
+                        "domain0b_complete": state.domain0b_complete,
+                        "phase2_active": state.phase2_active,
+                    },
+                }
         
         # =====================================================
         #  FIX 4 — HARD RESPONSE ENVELOPE FREEZE (V7)
