@@ -910,7 +910,7 @@ def run_cobra(payload: dict):
             state.symbolic_universe = {
                 "symbol_universe": confirmed,
                 "domain0_raw": confirmed
-        }
+            }
             state.domain0_complete = True
 
             save_session_state(session_id, state)
@@ -928,7 +928,7 @@ def run_cobra(payload: dict):
                 "state": {
                     "domain0_complete": True,
                     "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-                    "phase2_active": bool(getattr(state, "phase2_active", False),
+                    "phase2_active": bool(getattr(state, "phase2_active", False)),
                 },
                 "next_domain_recommendation": "D0B",
                 "media_suggestions": [],
