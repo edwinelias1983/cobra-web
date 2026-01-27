@@ -1117,10 +1117,13 @@ def run_cobra(payload: dict):
             payload.get("micro_response")
             and getattr(state, "domain0b_complete", False)
         ):
-            # Stop Domain 0B loop
             state.awaiting_micro_check = False
+
+            # CRITICAL FIX: advance server-owned domain
+            state.current_domain = Domain.D1
+
             save_session_state(session_id, state)
-            # DO NOT return here — fall through to model (Domain 1)
+            # fall through to model call
         # =====================================================
         # V7 HARD GATE — DOMAIN 0B REQUIRED BEFORE DOMAIN 1
         # =====================================================
