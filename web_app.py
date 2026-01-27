@@ -1130,7 +1130,7 @@ def run_cobra(payload: dict):
         # V7 POST-CONDITION — DOMAIN 0 INTEGRITY (HARD)
         # =====================================================
 
-        if getattr(state, "domain0_complete", False):
+        if getattr(state, "domain0_complete", False) and response.get("domain") == "D0":
             symbols = v7_get_symbol_universe(state)
 
             if not isinstance(symbols, list) or len(symbols) == 0:
