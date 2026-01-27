@@ -919,7 +919,7 @@ def run_cobra(payload: dict):
         print("SESSION_ID USED:", session_id)
 
         state = load_session_state(session_id)
-        
+
         # =====================================================
         # V7 HARD LOCK — DOMAIN 0 IS WRITE-ONCE (IMMUTABLE)
         # =====================================================
@@ -1085,8 +1085,9 @@ def run_cobra(payload: dict):
         if v7_requires_domain0b(state) and payload.get("micro_response"):
             v7_record_domain0b_answer(
                 state=state,
-                response=payload["micro_response"]
+                answer=payload["micro_response"]
             )
+
             save_session_state(session_id, state)
         # =====================================================
         # V7 HARD GATE — DOMAIN 0B REQUIRED BEFORE DOMAIN 1
