@@ -1426,34 +1426,8 @@ def run_cobra(payload: dict):
         )
 
         # V7 HARD SYMBOL SCOPE ENFORCEMENT (POST-MODEL ONLY)
-        response = enforce_symbol_scope(response, state)
+        response = enforce_symbol_scope(response, state)    
 
-        # =====================================================
-        # V7 PHASE-B OUTPUT VALIDATION (HARD)
-        # =====================================================
-        try:
-            validate_domain_output(response.get("domain"), response)
-
-        except DomainViolation as dv:
-            save_session_state(session_id, state)
-
-            return {
-                "domain": response.get("domain"),
-                "intent": "DOMAIN_VIOLATION",
-                "stability_assessment": "UNSTABLE",
-                "text": "The response violated the rules of this domain.",
-                "violation_report": dv.args[0] if dv.args else {
-                    "domain": response.get("domain"),
-                    "violations": ["unknown"]
-                },
-                "symbols_used": response.get("symbols_used", []),
-                "symbol_universe": v7_get_symbol_universe(state),
-                "state": {
-                    "domain0_complete": state.domain0_complete,
-                    "domain0b_complete": state.domain0b_complete,
-                    "phase2_active": state.phase2_active,
-                },
-            }
         # =====================================================
         # V7 HARD MICRO-CHECK NORMALIZATION (SERVER-AUTHORITY)
         # =====================================================
@@ -1465,8 +1439,9 @@ def run_cobra(payload: dict):
         expected_type = DOMAIN_MICRO_RESPONSE_TYPE.get(domain)
 
         if expected_type:
-            response.setdefault("micro_check", {})
-            response["micro_check"]["expected_response_type"] = expected_type
+            response["micro_check"] = {
+                "expected_response_type": expected_type
+            }
 
         # =====================================================
         # V7 PHASE-B OUTPUT VALIDATION (HARD)
@@ -1496,40 +1471,6 @@ def run_cobra(payload: dict):
                 violation_obj=violation_obj,
                 response_obj=response,
             )
-
-            # ---- Phase C: single auto-repair attempt ----
-            if not getattr(state, "phase_c_attempted", False):
-
-                state.phase_c_attempted = True
-                save_session_state(session_id, state)
-
-                repair_prompt = domain_repair_prompt(
-                    response.get("domain"),
-                    violation_obj
-                )
-
-                repaired_response = call_model_with_retry_v7(
-                    prompt=repair_prompt,
-                    state=state,
-                    expected_domain=expected_domain,
-                    expected_phase=expected_phase,
-                    symbol_universe=symbol_universe,
-                )
-
-                # 🔒 enforce symbol scope ONCE on repaired output
-                repaired_response = enforce_symbol_scope(repaired_response, state)
-
-                # Re-validate repaired output
-                validate_domain_output(
-                    repaired_response.get("domain"),
-                    repaired_response
-                )
-
-                response = repaired_response
-
-            else:
-                # ---- Hard stop after one failed repair ----
-                save_session_state(session_id, state)
 
                 return {
                     "domain": response.get("domain"),
