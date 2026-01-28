@@ -37,10 +37,31 @@ import uuid
 import copy
 from pathlib import Path
 
+# =====================================================
+# V7 CANONICAL MICRO RESPONSE TYPES (DO NOT DRIFT)
+# =====================================================
+DOMAIN_MICRO_RESPONSE_TYPE = {
+    "D0": "conceptual",
+    "D0B": "conceptual",
+
+    "D1": "symbolic",
+
+    "D2": "metaphoric",
+    "D2B": "mapping",
+
+    "D3": "pattern",
+    "D3B": "temporal",
+
+    "D4": "systemic",
+    "D5": "paradox",
+}
+
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
 
 @app.get("/health")
 def health():
@@ -197,6 +218,18 @@ def save_session_state(session_id: str, state: CobraState):
             (session_id, state_json, time.time()),
         )
         conn.commit()
+
+# ============================================================
+# SERVER-AUTHORITATIVE DOMAIN / PHASE
+# ============================================================
+
+def v7_expected_micro_response_type(domain: str) -> str:
+    return DOMAIN_MICRO_RESPONSE_TYPE.get(domain, "conceptual")
+
+def server_expected_domain(state: CobraState) -> str:
+    """
+    Server-owned domain scheduler, mirroring V7:
+     """
 
 # ============================================================
 # SERVER-AUTHORITATIVE DOMAIN / PHASE
@@ -970,6 +1003,11 @@ def run_cobra(payload: dict):
 
         state = load_session_state(session_id)
 
+        # =====================================================
+        #  V7 PHASE-C RESET (PER TURN, SERVER-AUTHORITY)
+        # =====================================================
+        state.phase_c_attempted = False
+
         # ===============================
         # V7 DOMAIN TRANSITION AUTHORITY
         # ===============================
@@ -1012,6 +1050,18 @@ def run_cobra(payload: dict):
         trigger_type = "micro" if payload.get("micro_response") else "prompt"
         state = commit_domain_transition(state, trigger_type)
 
+        # =====================================================
+        # V7 HARD RULE — MICRO-CHECK DOMAIN FREEZE
+        # While awaiting a micro-check, expected_domain MUST
+        # remain the current domain (never pre-advance)
+        # =====================================================
+
+        if getattr(state, "awaiting_micro_check", False):
+            expected_domain = (
+                state.current_domain
+                if isinstance(state.current_domain, Domain)
+                else Domain(state.current_domain)
+            )   
         # =====================================================
         # IRONCLAD V7 ASSERT — Domain 0 can never be "complete"
         # unless the symbol universe is a non-empty list[str]
@@ -1280,7 +1330,10 @@ def run_cobra(payload: dict):
         # ---------------------------
         
         # V7 HARD OVERRIDE — Domain 0 always runs until complete
-        if not getattr(state, "domain0_complete", False):
+        if getattr(state, "awaiting_micro_check", False):
+            # already frozen above
+            pass
+        elif not getattr(state, "domain0_complete", False):
             expected_domain = Domain.D0
         elif v7_requires_domain0b(state):
             expected_domain = Domain.D0B
@@ -1375,13 +1428,25 @@ def run_cobra(payload: dict):
         # V7 HARD SYMBOL SCOPE ENFORCEMENT (POST-MODEL ONLY)
         response = enforce_symbol_scope(response, state)
 
+        # =====================================================
+        # V7 HARD MICRO-CHECK NORMALIZATION (SERVER-AUTHORITY)
+        # =====================================================
+        domain = response.get("domain")
+
+        if isinstance(domain, Domain):
+            domain = domain.value
+
+        expected_type = DOMAIN_MICRO_RESPONSE_TYPE.get(domain)
+
+        if expected_type:
+            response.setdefault("micro_check", {})
+            response["micro_check"]["expected_response_type"] = expected_type
 
         # =====================================================
         # V7 PHASE-B OUTPUT VALIDATION (HARD)
         # =====================================================
-
-        try:
-            validate_domain_output(response.get("domain"), response)
+        
+        response = enforce_symbol_scope(response, state)
 
         except DomainViolation as dv:
 
