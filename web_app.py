@@ -1275,6 +1275,28 @@ def run_cobra(payload: dict):
 
             save_session_state(session_id, state)
             # fall through to model call
+        
+        # =====================================================
+        # V7 HARD EXIT — STOP D0B QUESTION LOOP (STEP 3)
+        # =====================================================
+        return {
+            "domain": "D0B",
+            "phase": "PHASE_1",
+            "intent": "TRANSITION",
+            "text": "Domain 0B calibration complete.",
+            "next_domain_recommendation": "D1",
+            "micro_check": {
+                "expected_response_type": "symbolic"
+            },
+            "state": {
+                "domain0_complete": True,
+                "domain0b_complete": True,
+                "phase2_active": bool(getattr(state, "phase2_active", False)),
+            },
+            "symbol_universe": v7_get_symbol_universe(state),
+            "symbols_used": v7_get_symbol_universe(state),
+            "payload": {},
+        }
         # =====================================================
         # V7 HARD GATE — DOMAIN 0B REQUIRED BEFORE DOMAIN 1
         # =====================================================
