@@ -1265,9 +1265,12 @@ def run_cobra(payload: dict):
         # V7 EXIT — DOMAIN 0B JUST COMPLETED
         # =====================================================
         if (
-            payload.get("micro_response")
-            and getattr(state, "domain0b_complete", False)
+            getattr(state, "domain0b_complete", False)
+            and state.current_domain == Domain.D0B
         ):
+            state.current_domain = Domain.D1
+            save_session_state(session_id, state)
+
             state.awaiting_micro_check = False
 
             # CRITICAL FIX: advance server-owned domain
@@ -1593,16 +1596,6 @@ def run_cobra(payload: dict):
 
         # If server expects D1 but model still said D0, coerce to D1
         log_interaction(payload, response)
-
-        # -------------------------------------------------
-        # V7 DOMAIN 0 / 0B STATE COMMIT (SERVER-OWNED)
-        # -------------------------------------------------
-
-        if isinstance(response.get("domain"), str):
-            try:
-                state.current_domain = Domain(response["domain"])
-            except ValueError:
-                pass
 
         # -------------------------------------------------
         # V7 PHASE COMMIT (SERVER-OWNED)
