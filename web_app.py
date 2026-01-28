@@ -1472,20 +1472,20 @@ def run_cobra(payload: dict):
                 response_obj=response,
             )
 
-                return {
-                    "domain": response.get("domain"),
-                    "intent": "DOMAIN_VIOLATION",
-                    "stability_assessment": "UNSTABLE",
-                    "text": "The response violated the rules of this domain and could not be repaired.",
-                    "violation_report": violation_obj,
-                    "symbols_used": response.get("symbols_used", []),
-                    "symbol_universe": v7_get_symbol_universe(state),
-                    "state": {
-                        "domain0_complete": state.domain0_complete,
-                        "domain0b_complete": state.domain0b_complete,
-                        "phase2_active": state.phase2_active,
-                    },
-                }
+            return {
+                "domain": response.get("domain"),
+                "intent": "DOMAIN_VIOLATION",
+                "stability_assessment": "UNSTABLE",
+                "text": "The response violated the rules of this domain and could not be repaired.",
+                "violation_report": violation_obj,
+                "symbols_used": response.get("symbols_used", []),
+                "symbol_universe": v7_get_symbol_universe(state),
+                "state": {
+                    "domain0_complete": state.domain0_complete,
+                    "domain0b_complete": state.domain0b_complete,
+                    "phase2_active": state.phase2_active,
+                },
+            }
         
         # =====================================================
         #  FIX 4 — HARD RESPONSE ENVELOPE FREEZE (V7)
