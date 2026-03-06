@@ -1142,6 +1142,7 @@ def run_cobra(payload: dict):
         # -------------------------------------------------
         # PHASE 1 TRANSFER GATE (V7)
         # -------------------------------------------------
+        expected_domain = server_expected_domain(state)
 
         if (
             getattr(state, "domain0_complete", False)
