@@ -36,7 +36,6 @@ import uuid
 import copy
 import psycopg2
 import psycopg2.extras
-from pathlib import Path
 
 app = FastAPI()
 if os.path.isdir("static"):
@@ -56,39 +55,18 @@ def get_db():
     url = os.environ.get("DATABASE_URL", "").strip().replace("postgres://", "postgresql://", 1)
     return psycopg2.connect(url)
 
-
 def init_db():
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS interactions (
-                    id SERIAL PRIMARY KEY,
-                    ts REAL,
-                    payload_hash TEXT,
-                    payload TEXT,
-                    response TEXT
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS cobra_sessions (
-                    session_id TEXT PRIMARY KEY,
-                    state_json TEXT,
-                    updated_ts REAL
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS violations (
-                    id SERIAL PRIMARY KEY,
-                    ts REAL,
-                    session_id TEXT,
-                    domain TEXT,
-                    phase TEXT,
-                    expected_domain TEXT,
-                    payload_hash TEXT,
-                    violation_json TEXT,
-                    response_json TEXT
-                )
-            """)
+            cur.execute("""CREATE TABLE IF NOT EXISTS interactions (
+                id SERIAL PRIMARY KEY, ts REAL, payload_hash TEXT,
+                payload TEXT, response TEXT)""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS cobra_sessions (
+                session_id TEXT PRIMARY KEY, state_json TEXT, updated_ts REAL)""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS violations (
+                id SERIAL PRIMARY KEY, ts REAL, session_id TEXT, domain TEXT,
+                phase TEXT, expected_domain TEXT, payload_hash TEXT,
+                violation_json TEXT, response_json TEXT)""")
         conn.commit()
 
 def log_interaction(payload, response_obj):
