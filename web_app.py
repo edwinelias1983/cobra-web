@@ -49,7 +49,7 @@ def health():
     return {"status": "ok"}
 
 # ============================================================
-# PERSISTENT STORAGE (SQLite)
+# PERSISTENT STORAGE (PostgreSQL)
 # ============================================================
 
 def get_db():
@@ -141,12 +141,13 @@ def log_violation(
 # ============================================================
 
 def load_session_state(session_id: str) -> CobraState:
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.execute(
-            "SELECT state_json FROM cobra_sessions WHERE session_id = ?",
-            (session_id,)
-        )
-        row = cur.fetchone()
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT state_json FROM cobra_sessions WHERE session_id = %s",
+                (session_id,)
+            )
+            row = cur.fetchone()
 
     if not row:
         return CobraState()
@@ -178,19 +179,21 @@ def save_session_state(session_id: str, state: CobraState):
 
     state_json = json.dumps(data, ensure_ascii=False)
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
-            VALUES (?, ?, ?)
-            ON CONFLICT(session_id)
-            DO UPDATE SET
-                state_json = excluded.state_json,
-                updated_ts = excluded.updated_ts
-            """,
-            (session_id, state_json, time.time()),
-        )
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO cobra_sessions (session_id, state_json, updated_ts)
+                VALUES (%s, %s, %s)
+                ON CONFLICT(session_id)
+                DO UPDATE SET
+                    state_json = EXCLUDED.state_json,
+                    updated_ts = EXCLUDED.updated_ts
+                """,
+                (session_id, state_json, time.time()),
+            )
         conn.commit()
+
 # ============================================================
 # V7 SERVER-OWNED DOMAIN COMMIT (SINGLE WRITER)
 # ============================================================
