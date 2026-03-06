@@ -38,6 +38,10 @@ import psycopg2
 import psycopg2.extras
 
 app = FastAPI()
+@app.on_event("startup")
+async def startup():
+    init_db()
+
 if os.path.isdir("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
