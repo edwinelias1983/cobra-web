@@ -565,7 +565,7 @@ function renderCobraResponse(data){
   console.log("DOMAIN BLOCKS:", data.payload?.blocks);
 
   if (data.payload && Array.isArray(data.payload.blocks)) {
-    renderBlocks(data.payload.blocks);
+    renderBlocks(data.payload.blocks, data.domain);
   }
 
   console.log("renderCobraResponse domain/state:", data.domain, data.state);
@@ -705,7 +705,7 @@ function renderBlocks(blocks, domain) {
       container.appendChild(p);
     }
 
-    if (block.type === 'image_row' && ['D1','D2'].includes(data.domain) {
+    if (block.type === 'image_row' && ['D1','D2'].includes(domain)) {
       const row = document.createElement('div');
       row.className = 'image-row';
       block.images.forEach(img => {
