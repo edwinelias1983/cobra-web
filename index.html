@@ -256,10 +256,18 @@ pre{
     <!-- (Unlocked only after D0 + D0B complete)                -->
     <!-- ===================================================== -->
     <div id="chatInputBar">
-      <label>Next move</label>
-      <textarea id="chatUserInput" rows="2"></textarea>
-      <button class="primary" onclick="sendChat()">Send</button>
-    </div>
+        <label>Next move</label>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:0.85em; opacity:0.7;">Mode</label>
+          <select id="persistentMode" onchange="updateMode(this.value)">
+            <option value="adventure">Adventure</option>
+            <option value="learn">Learn</option>
+            <option value="mastery">Mastery</option>
+          </select>
+        </div>
+        <textarea id="chatUserInput" rows="2"></textarea>
+        <button class="primary" onclick="sendChat()">Send</button>
+      </div>
 
     <!-- NEW: expansion choices container (initially hidden) -->
     <div id="expansionChoices" style="display:none; margin-top:16px;"></div>
@@ -386,6 +394,10 @@ function addChatMessage(role, text){
 /* ADDED: Send button handler (persistent input)          */
 /* Uses /cobra/run with session_id and prompt             */
 /* ===================================================== */
+function updateMode(val) {
+  const modeSelect = document.getElementById("mode");
+    if (modeSelect) modeSelect.value = val;
+  }
 async function sendChat(){
   const input = document.getElementById("chatUserInput");
   const text = input.value.trim();
@@ -543,9 +555,11 @@ function renderCobraResponse(data){
   // =====================================================
   // Permanent unlock ONLY after D0 + D0B
   // =====================================================
-  if (!(data && data.domain === "D0" && data.intent === "REPAIR")) {
+  if (!(data && data.domain === "D0" && data.intent === "REPAIR") &&
+      !(data && data.domain === "D0B")) {
     unlockChatIfReady(data);
   }
+
   applyDomainGovernor(data);
 
   // EXPANSION INVITE UI: show/hide expansionChoices
@@ -650,7 +664,7 @@ function renderBlocks(blocks) {
       container.appendChild(p);
     }
 
-    if (block.type === 'image_row') {
+    if (block.type === 'image_row' && ['D1','D2'].includes(data.domain)) {
       const row = document.createElement('div');
       row.className = 'image-row';
       block.images.forEach(img => {
@@ -661,7 +675,6 @@ function renderBlocks(blocks) {
       });
       container.appendChild(row);
     }
-
 
     if (block.type === 'grouped_list') {
       const title = document.createElement('h3');

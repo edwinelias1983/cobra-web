@@ -307,13 +307,12 @@
       "type": "object",
       "additionalProperties": true
     },
-        "state": {
+    "state": {
       "type": "object",
       "additionalProperties": true,
       "required": [
-        "domain0_complete",
-        "domain0b_complete"
-      ],
+        "domain0_complete"
+    ],
       "properties": {
         "domain0_complete": { "type": "boolean" },
         "domain0b_complete": { "type": "boolean" }

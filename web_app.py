@@ -32,36 +32,17 @@ from openai import OpenAI
 import json
 import hashlib
 import time
-import sqlite3
 import uuid
 import copy
+import psycopg2
+import psycopg2.extras
 from pathlib import Path
 
-# =====================================================
-# V7 CANONICAL MICRO RESPONSE TYPES (DO NOT DRIFT)
-# =====================================================
-DOMAIN_MICRO_RESPONSE_TYPE = {
-    "D0": "conceptual",
-    "D0B": "conceptual",
-
-    "D1": "symbolic",
-
-    "D2": "metaphoric",
-    "D2B": "mapping",
-
-    "D3": "pattern",
-    "D3B": "temporal",
-
-    "D4": "systemic",
-    "D5": "paradox",
-}
-
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
 
 @app.get("/health")
 def health():
@@ -71,49 +52,43 @@ def health():
 # PERSISTENT STORAGE (SQLite)
 # ============================================================
 
-DB_PATH = Path("cobra_data.sqlite")
+def get_db():
+    url = os.environ.get("DATABASE_URL", "").replace("postgres://", "postgresql://", 1)
+    return psycopg2.connect(url)
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-
-        # Normal interaction logging (unchanged)
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS interactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts REAL,
-            payload_hash TEXT,
-            payload TEXT,
-            response TEXT
-        )
-        """)
-
-        # Session state storage (unchanged)
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS cobra_sessions (
-            session_id TEXT PRIMARY KEY,
-            state_json TEXT,
-            updated_ts REAL
-        )
-        """)
-
-        # 🔒 V7 Phase-B Violation Log (NEW — DO NOT MERGE)
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS violations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts REAL,
-            session_id TEXT,
-            domain TEXT,
-            phase TEXT,
-            expected_domain TEXT,
-            payload_hash TEXT,
-            violation_json TEXT,
-            response_json TEXT
-        )
-        """)
-
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS interactions (
+                    id SERIAL PRIMARY KEY,
+                    ts REAL,
+                    payload_hash TEXT,
+                    payload TEXT,
+                    response TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS cobra_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    state_json TEXT,
+                    updated_ts REAL
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS violations (
+                    id SERIAL PRIMARY KEY,
+                    ts REAL,
+                    session_id TEXT,
+                    domain TEXT,
+                    phase TEXT,
+                    expected_domain TEXT,
+                    payload_hash TEXT,
+                    violation_json TEXT,
+                    response_json TEXT
+                )
+            """)
         conn.commit()
-
-init_db()
 
 def log_interaction(payload, response_obj):
     payload_json = json.dumps(payload, ensure_ascii=False)
@@ -122,15 +97,17 @@ def log_interaction(payload, response_obj):
 
     session_id = payload.get("session_id") or str(uuid.uuid4())
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO interactions (ts, payload_hash, payload, response)
-            VALUES (?, ?, ?, ?)
-            """,
-            (time.time(), payload_hash, payload_json, response_json),
-        )
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO interactions (ts, payload_hash, payload, response)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (time.time(), payload_hash, payload_json, response_json),
+            )
         conn.commit()
+
 def log_violation(
     *,
     session_id: str,
@@ -147,25 +124,18 @@ def log_violation(
 
     payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO violations
-            (ts, session_id, domain, phase, expected_domain, payload_hash, violation_json, response_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                time.time(),
-                session_id,
-                domain,
-                phase,
-                expected_domain,
-                payload_hash,
-                violation_json,
-                response_json,
-            ),
-        )
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO violations
+                (ts, session_id, domain, phase, expected_domain, payload_hash, violation_json, response_json)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (time.time(), session_id, domain, phase, expected_domain, payload_hash, violation_json, response_json),
+            )
         conn.commit()
+
 # ============================================================
 # SESSION STATE HELPERS
 # ============================================================
@@ -186,6 +156,9 @@ def load_session_state(session_id: str) -> CobraState:
     for k, v in data.items():
         if hasattr(state, k):
             setattr(state, k, v)
+    
+    if not isinstance(state.domain0_candidate_symbols, list):
+        state.domain0_candidate_symbols = []
 
     if isinstance(state.interaction_mode, str):
         state.interaction_mode = InteractionMode(state.interaction_mode)
@@ -218,18 +191,22 @@ def save_session_state(session_id: str, state: CobraState):
             (session_id, state_json, time.time()),
         )
         conn.commit()
-
 # ============================================================
-# SERVER-AUTHORITATIVE DOMAIN / PHASE
+# V7 SERVER-OWNED DOMAIN COMMIT (SINGLE WRITER)
 # ============================================================
 
-def v7_expected_micro_response_type(domain: str) -> str:
-    return DOMAIN_MICRO_RESPONSE_TYPE.get(domain, "conceptual")
-
-def server_expected_domain(state: CobraState) -> str:
+def commit_domain(state: CobraState, next_domain: Domain):
     """
-    Server-owned domain scheduler, mirroring V7:
-     """
+    V7 HARD RULE:
+    The server commits domain transitions exactly once.
+    No model, no helper, no UI may mutate domain.
+    """
+    if isinstance(next_domain, str):
+        next_domain = Domain(next_domain)
+
+    state.current_domain = next_domain
+    state.awaiting_micro_check = False
+    state.next_domain_recommendation = None
 
 # ============================================================
 # SERVER-AUTHORITATIVE DOMAIN / PHASE
@@ -817,25 +794,6 @@ def ensure_domain1_structure(response: dict, state: CobraState) -> dict:
         symbols = v7_get_symbol_universe(state) or ["your world"]
         symbol_label = ", ".join(symbols)
 
-    # 3) Ensure Domain 1 micro-check scaffold
-    micro_check = response.get("micro_check") or {}
-    micro_check.setdefault("required", True)
-    micro_check.setdefault(
-        "rules",
-        [
-            "One sentence.",
-            f"Use only language from: {symbol_label}.",
-            "No science terms yet.",
-        ],
-    )
-    micro_check.setdefault(
-        "prompt",
-        "Using only your symbols, describe how things are set up right now."
-    )
-    response["micro_check"] = micro_check
-
-    return response
-
 def domain1_style_instruction() -> str:
     """
     Instruction text enforcing 'Domain 1 = symbols only, no theory'.
@@ -1046,22 +1004,10 @@ def run_cobra(payload: dict):
             state.current_domain = Domain(target)
             state.next_domain_recommendation = None
             return state
+        # Domain transitions are engine-owned in app.py; no local commit here.
+        #trigger_type = "micro" if payload.get("micro_response") else "prompt"
+        #state = commit_domain_transition(state, trigger_type)
 
-        trigger_type = "micro" if payload.get("micro_response") else "prompt"
-        state = commit_domain_transition(state, trigger_type)
-
-        # =====================================================
-        # V7 HARD RULE — MICRO-CHECK DOMAIN FREEZE
-        # While awaiting a micro-check, expected_domain MUST
-        # remain the current domain (never pre-advance)
-        # =====================================================
-
-        if getattr(state, "awaiting_micro_check", False):
-            expected_domain = (
-                state.current_domain
-                if isinstance(state.current_domain, Domain)
-                else Domain(state.current_domain)
-            )   
         # =====================================================
         # IRONCLAD V7 ASSERT — Domain 0 can never be "complete"
         # unless the symbol universe is a non-empty list[str]
@@ -1128,39 +1074,18 @@ def run_cobra(payload: dict):
                 confirmed = None
 
             if not domain0_ready:
-                return {
-                    "domain": "D0",
-                    "phase": "PHASE_1",
-                    "intent": "REPAIR",
-                    "repair_required": True,
-                    "stability_assessment": "UNSTABLE",
-                    "text": (
-                        "Domain 0 incomplete. You must provide:\n"
-                        "- what you want to understand\n"
-                        "- what you naturally understand or like\n"
-                        "- an interaction mode"
-                    ),
-                    "symbols_used": [],
-                    "symbol_universe": [],
-                    "state": {
-                        "domain0_complete": False,
-                        "domain0b_complete": False,
-                        "phase2_active": False,
-                    },
-                    "next_domain_recommendation": "D0",
-                    "media_suggestions": [],
-                    "payload": {},
-                    "micro_check": {
-                        "prompt": "Answer the questions above.",
-                        "expected_response_type": "conceptual",
-                    },
-                }
+                    # DEFER: Domain 0 incomplete; let call_model_with_retry_v7
+                    # decide the repair envelope using want/likes/interaction_mode.
+                    pass
 
             # ONLY REACHED IF domain0_ready == True
+            # DEFER: Domain 0 lock/confirmation to engine; keep confirmed for engine use.
             state.symbolic_universe = {
             "symbol_universe": confirmed["likes"],   # LIST[str]
             "domain0_raw": confirmed                 # full record preserved
             }
+            # Do NOT set state.domain0_complete or return a D0 confirmation here.
+            # Just fall through to the normal engine call.
             state.domain0_complete = True
             save_session_state(session_id, state)
 
@@ -1205,131 +1130,17 @@ def run_cobra(payload: dict):
         # If caller wants to reseed symbols, clear the old universe
         if reset_symbols:
             state.symbolic_universe = {"symbol_universe": [], "domain0_raw": []}
-            state.domain0_complete = False  # only if you want to re-run Domain 0
-
-        # =====================================================
-        # V7 HARD GATE — MICRO-CHECK REQUIRES SYMBOL UNIVERSE
-        # =====================================================
-        if payload.get("micro_response"):
-            if not getattr(state, "domain0_complete", False):
-                return {
-                    "domain": "D0",
-                    "intent": "REPAIR",
-                    "text": "Symbol universe is empty. Domain 0 must be completed before micro-check.",
-                    "repair_required": True,
-                    "symbols_used": [],
-                    "symbol_universe": [],
-                    "state": {
-                        "domain0_complete": False,
-                        "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-                },
-             }
-
-        # =====================================================
-        # V7 HARD MICRO-CHECK GATE — NO ADVANCE WITHOUT PASS
-        # =====================================================
-        # If awaiting_micro_check is set (e.g., from Domain 1), always return the same
-        # micro-check payload until a micro_response is provided.
-
-        if getattr(state, "awaiting_micro_check", False) and not payload.get("micro_response"):
-            response = state.last_microcheck_response
-            response.setdefault("intent", "MICRO_CHECK")
-            response["state"] = {
-                "domain0_complete": bool(getattr(state, "domain0_complete", False)),
-                "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
-            }
-            save_session_state(session_id, state)
-            return response
-
-        # =====================================================
-        # V7 HARD GUARD — Domain 0 / 0B are write-once
-        # =====================================================
-        if state.domain0_complete:
-            payload.pop("interaction_mode", None)
-            payload.pop("want_to_understand", None)
-            payload.pop("likes", None)
-            payload.setdefault("prompt", "")
-
-        # =====================================================
-        # V7 DOMAIN 0B — RECORD INTERACTION CONSTRAINTS
-        # =====================================================
-        if v7_requires_domain0b(state) and payload.get("micro_response"):
-            v7_record_domain0b_answer(
-                state=state,
-                answer=payload["micro_response"]
-            )
-
-            save_session_state(session_id, state)
-        
-        # =====================================================
-        # V7 EXIT — DOMAIN 0B JUST COMPLETED
-        # =====================================================
-        if (
-            getattr(state, "domain0b_complete", False)
-            and state.current_domain == Domain.D0B
-        ):
-            state.current_domain = Domain.D1
-            save_session_state(session_id, state)
-
-            state.awaiting_micro_check = False
-
-            # CRITICAL FIX: advance server-owned domain
-            state.current_domain = Domain.D1
-
-            save_session_state(session_id, state)
-            # fall through to model call
-        
-        # =====================================================
-        # V7 HARD EXIT — STOP D0B QUESTION LOOP (STEP 3)
-        # =====================================================
-        return {
-            "domain": "D0B",
-            "phase": "PHASE_1",
-            "intent": "TRANSITION",
-            "text": "Domain 0B calibration complete.",
-            "next_domain_recommendation": "D1",
-            "micro_check": {
-                "expected_response_type": "symbolic"
-            },
-            "state": {
-                "domain0_complete": True,
-                "domain0b_complete": True,
-                "phase2_active": bool(getattr(state, "phase2_active", False)),
-            },
-            "symbol_universe": v7_get_symbol_universe(state),
-            "symbols_used": v7_get_symbol_universe(state),
-            "payload": {},
-        }
-        # =====================================================
-        # V7 HARD GATE — DOMAIN 0B REQUIRED BEFORE DOMAIN 1
-        # =====================================================
-        if v7_requires_domain0b(state):
-            response = v7_domain0b_response(state)
-            save_session_state(session_id, state)
-            return response
-
-        # =====================================================
-        # V7 TRANSITION — DOMAIN 0B COMPLETE → PROCEED
-        # =====================================================
-        if (
-            not v7_requires_domain0b(state)
-            and payload.get("micro_response")
-        ):
-            # Clear any lingering micro-check flags
-            state.awaiting_micro_check = False
-            save_session_state(session_id, state)
-            # Fall through to model call (Domain 1)
+            # DEFER: Domain 0 completion flag to engine; do not flip it here.
+            # state.domain0_complete = False
 
         # ---------------------------
         # Build prompt
         # ---------------------------
         prompt = payload.get("prompt", "")
 
-        # If a specific Phase 2 stress-test mode is selected, annotate the prompt
         if phase2_stress_mode:
             prompt = f"Phase 2 stress-test mode: {phase2_stress_mode}.\n\n{prompt}"
 
-        # DOMAIN 0: inject required answers so V7 can evaluate them
         if not state.domain0_complete:
             prompt = (
                 f"Interaction mode: {payload.get('interaction_mode')}\n"
@@ -1340,30 +1151,6 @@ def run_cobra(payload: dict):
 
         if payload.get("micro_response"):
             prompt += f"\n\nUser micro-check response:\n{payload['micro_response']}"
-            if hasattr(state, "awaiting_micro_check"):
-                state.awaiting_micro_check = False
-
-        # =====================================================
-        # V7 HARD GUARD — prevent Domain 0 / 0B reseeding via prompt
-        # =====================================================
-        if state.domain0_complete:
-            # Prompt may continue conversation, but not reseed symbols
-            pass
-
-        ## ---------------------------
-        # Call V7 engine
-        # ---------------------------
-        
-        # V7 HARD OVERRIDE — Domain 0 always runs until complete
-        if getattr(state, "awaiting_micro_check", False):
-            # already frozen above
-            pass
-        elif not getattr(state, "domain0_complete", False):
-            expected_domain = Domain.D0
-        elif v7_requires_domain0b(state):
-            expected_domain = Domain.D0B
-        else:
-            expected_domain = server_expected_domain(state)
 
         # -------------------------------------------------
         # PHASE 1 TRANSFER GATE (V7)
@@ -1401,16 +1188,47 @@ def run_cobra(payload: dict):
             response = v7_expansion_prompt(state)
             save_session_state(session_id, state)
             return response
+        
+                # V7 CONFIDENCE CALIBRATION LOOP (post-Phase-2)
+        if (
+            getattr(state, "phase2_active", False)
+            and getattr(state, "phase1_transfer_complete", False)
+            and payload.get("expansion_opt_out")
+            and not getattr(state, "calibration_complete", False)
+        ):
+            state.calibration_complete = False
+            response = {
+                "domain": v7_state_domain_label(state),
+                "phase": "PHASE_2",
+                "intent": "QUESTION",
+                "text": (
+                    "Before we close — how confident do you feel right now? "
+                    "Not about the symbols, but about whether this will actually hold "
+                    "when you're back in your world. Scale of 1–5, or just tell me."
+                ),
+                "introduced_new_symbols": False,
+                "repair_required": False,
+                "stability_assessment": "UNKNOWN",
+                "micro_check": {
+                    "prompt": "How confident do you feel this will hold in real life?",
+                    "expected_response_type": "reflection"
+                },
+                "state": {
+                    "domain0_complete": bool(getattr(state, "domain0_complete", False)),
+                    "domain0b_complete": bool(getattr(state, "domain0b_complete", False)),
+                },
+            }
+            state.calibration_complete = True
+            save_session_state(session_id, state)
+            return response
 
         expected_phase = "PHASE_2" if getattr(state, "phase2_active", False) else "PHASE_1"
-        symbol_universe = server_symbol_universe(payload, state) or []
 
-        # V7 HARD RULE:
-        # Domain 0 completes IFF symbol universe is committed
-        if not getattr(state, "domain0_complete", False):
-            if isinstance(symbol_universe, list) and symbol_universe:
-                state.symbolic_universe["symbol_universe"] = symbol_universe
-                state.domain0_complete = True
+        # DEFER: symbol_universe computation and Domain 0 completion to the engine.
+        # Here we only surface any existing symbolic_universe from state for the prompt.
+        symbol_universe = state.symbolic_universe.get("symbol_universe", []) if isinstance(
+            getattr(state, "symbolic_universe", None), dict
+        ) else []
 
         # =====================================================
         # V7 SYMBOLIC SCOPE LOCK — GLOBAL (ALL DOMAINS)
@@ -1452,21 +1270,6 @@ def run_cobra(payload: dict):
 
         # V7 HARD SYMBOL SCOPE ENFORCEMENT (POST-MODEL ONLY)
         response = enforce_symbol_scope(response, state)    
-
-        # =====================================================
-        # V7 HARD MICRO-CHECK NORMALIZATION (SERVER-AUTHORITY)
-        # =====================================================
-        domain = response.get("domain")
-
-        if isinstance(domain, Domain):
-            domain = domain.value
-
-        expected_type = DOMAIN_MICRO_RESPONSE_TYPE.get(domain)
-
-        if expected_type:
-            response["micro_check"] = {
-                "expected_response_type": expected_type
-            }
 
         # =====================================================
         # V7 PHASE-B OUTPUT VALIDATION (HARD)
@@ -1548,25 +1351,12 @@ def run_cobra(payload: dict):
             response["micro_check"] = {}
         elif not isinstance(micro, dict):
             raise TypeError(
-            f"V7 violation: micro_check must be dict, got {type(micro)}"
-        )   
-
-        # 6. Enforce text scalar
-        if not isinstance(response.get("text", ""), str):
-            response["text"] = str(response.get("text", ""))
-
-        # =====================================================
-        # V7 HARD RESPONSE NORMALIZATION (ROBUST)
-        # =====================================================
-        if not isinstance(response, dict):
-            raise TypeError(
-                f"V7 violation: model returned {type(response)} instead of dict"
+                f"V7 violation: micro_check must be dict, got {type(micro)}"
             )
 
-        # Guarantee core shape early
-        response.setdefault("payload", {})
-        response.setdefault("micro_check", {})
-        response.setdefault("text", "")
+        # 6. Enforce text scalari can 
+        if not isinstance(response.get("text", ""), str):
+            response["text"] = str(response.get("text", ""))
 
         # =====================================================
         # V7 HARD RESPONSE INVARIANT
@@ -1604,50 +1394,6 @@ def run_cobra(payload: dict):
         if response.get("phase") == "PHASE_2":
             state.phase2_active = True
 
-        # =====================================================
-        # SERVER FALLBACK: First D1 micro-check if model forgets
-        # =====================================================
-        if (
-            getattr(state, "domain0_complete", False)
-            and response.get("domain") == "D1"
-            and not getattr(state, "domain1_microcheck_shown", False)
-            # allow images during the first D1 micro-check
-        ):
-            # 1) Normalize Domain 1 layout + micro_check
-            response = ensure_domain1_structure(response, state)
-
-            # 2) Domain 1: symbolic image from user's symbols
-            response = add_domain1_image_row_from_symbols(response, state)
-
-            # 3) Domain 1: explanation text from user's symbols
-            response = add_domain1_explanation_from_symbols(response, state)
-
-            # 4) Domain 2: metaphoric images from user's symbol universe
-            response = add_domain2_images_from_symbols(response, state)
-
-            # 5) Domain 3: simple diagram from user's symbols
-            response = add_domain3_diagram_from_symbols(response, state)
-
-            mc = response.get("micro_check") or {}
-
-            mc["required"] = True
-
-            mc["rules"] = [
-                "One sentence.",
-                "Use only the learner’s own symbols.",
-                "No theory. No explanation. No abstraction.",
-            ]
-
-            mc["prompt"] = "Using only your symbols, describe how things are set up right now."
-
-            mc["system_constraint"] = micro_check_symbolic_lock()
-
-            response["micro_check"] = mc
-
-            response["intent"] = "MICRO_CHECK"
-            state.domain1_microcheck_shown = True
-            state.last_microcheck_response = copy.deepcopy(response)
-            state.awaiting_micro_check = True
         # =====================================================
         # Always enrich D1/D2/D3 with symbol-based visuals/text
         # =====================================================

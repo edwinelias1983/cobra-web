@@ -12,8 +12,17 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Load COBRA Response Schema (ENFORCED)
 # =========================
 SCHEMA_PATH = "cobra_response_schema_v1.json"
+
 with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
     COBRA_SCHEMA = json.load(f)
+
+ENGINE_FORBIDDEN_PAYLOAD_KEYS = {
+    "csrf_token",
+    "session_id",
+    "domEvent",
+    "user_agent",
+    "request_id",
+}
 
 ALLOWED_MEDIA_DOMAINS = {"D1", "D2"}
 
@@ -27,7 +36,7 @@ Fix the response by outputting ONLY JSON (no markdown, no commentary, no code fe
 Hard Rules:
 1) Keep the same domain and phase: domain={EXPECTED_DOMAIN}, phase={EXPECTED_PHASE}.
 2) introduced_new_symbols MUST be boolean false unless explicitly allowed.
-3) intent MUST be one of: QUESTION, EXPLANATION, MICRO_CHECK, REPAIR, TRANSFER_CHECK, PHASE2_CHOICE, STRESS_TEST, EXPANSION_INVITE, SUMMARY
+3) intent MUST be one of: QUESTION, EXPLANATION, MICRO_CHECK, REPAIR, TRANSFER_CHECK, STRESS_TEST, EXPANSION_INVITE, SUMMARY
 4) stability_assessment MUST be one of: STABLE, UNSTABLE, UNKNOWN
 5) Include exactly ONE micro_check object with:
    - prompt
@@ -38,7 +47,22 @@ Hard Rules:
    - symbols_used (array) AND every entry in symbols_used MUST be an element of symbol_universe
 8) Return ONLY the corrected JSON object now.
 """
-
+# =========================
+# V7 PHASE TOKEN NORMALIZER
+# =========================
+def normalize_phase_for_schema(phase: str) -> str:
+    """
+    Normalizes phase tokens to match schema exactly.
+    Model sometimes returns PHASE1 / PHASE2 (no underscore).
+    Schema requires PHASE_1 / PHASE_2.
+    """
+    mapping = {
+        "PHASE1": "PHASE_1",
+        "PHASE2": "PHASE_2",
+        "phase1": "PHASE_1",
+        "phase2": "PHASE_2",
+    }
+    return mapping.get(phase, phase)
 # =========================
 # LLM CALL (JSON GUARDED)
 # =========================
@@ -211,6 +235,7 @@ class CobraState:
     stamina_used: bool = False
     consolidation_active: bool = False
     last_microcheck_passed: bool = False
+    consecutive_unstable_turns: int = 0
 
     last_intent: str | None = None
 
@@ -345,16 +370,55 @@ def v7_block_generic_fallback_text(text: str):
 
 def v7_enforce_media_domain(parsed: dict):
     """
-    media_suggestions must be array and only allowed for D1/D2.
+    Enforce V7 visual / media rules by domain.
+
+    - D1 / D2: media_suggestions allowed (must still be grounded in symbol_universe elsewhere).
+    - D3: allow only minimal/diagram-type media, no images/GIFs.
+    - D3B / D4 / D5: media_suggestions must be empty or absent.
     """
     dom = parsed.get("domain")
     media = parsed.get("media_suggestions", [])
+
+    # Nothing to enforce if field is missing
     if media is None:
         return
+
     if not isinstance(media, list):
         raise RuntimeError("[V7 VIOLATION] media_suggestions must be an array")
-    if media and dom not in ("D1", "D2"):
-        raise RuntimeError("[V7 VIOLATION] media_suggestions only allowed in D1 or D2")
+
+    # No media at all in D3B / D4 / D5
+    if dom in ("D3B", "D4", "D5"):
+        if media:
+            raise RuntimeError(
+                "[V7 VIOLATION] media_suggestions not allowed in D3B/D4/D5"
+            )
+        return
+
+    # D1 / D2: media allowed (symbol grounding enforced elsewhere)
+    if dom in ("D1", "D2"):
+        return
+
+    # D3: allow only 'diagram'-type hints, no images/GIFs
+    if dom == "D3":
+        for item in media:
+            if isinstance(item, dict):
+                mtype = item.get("type", "").lower()
+                if mtype not in ("diagram", "schematic", "text"):
+                    raise RuntimeError(
+                        "[V7 VIOLATION] visual media (images/GIFs) not allowed in D3"
+                    )
+            else:
+                # If not structured, treat any non-empty entry as illegal visual
+                raise RuntimeError(
+                    "[V7 VIOLATION] visual media (images/GIFs) not allowed in D3"
+                )
+        return
+
+    # Other domains (e.g., D0 / D0B): no media_suggestions expected
+    if media:
+        raise RuntimeError(
+            f"[V7 VIOLATION] media_suggestions not allowed in domain {dom}"
+        )
 
 def v7_enforce_symbol_binding(parsed: dict, expected_domain: str, symbol_universe: list | None):
     """
@@ -607,7 +671,6 @@ def call_model_with_retry_v7(
     V7 wrapper: enforces domain progression via state + validates with V7 invariants.
     Uses llm_call + retry loop.
     """
-
     # ---------------------------
     # V7 FIX #3 — EXPLICIT DOMAIN 0 CONFIRMATION
     # ---------------------------
@@ -620,16 +683,51 @@ def call_model_with_retry_v7(
             payload = None
     else:
         payload = None
+    
+    # Optional structured flag from controller: user asserts mastery/certainty
+    force_mastery = False
+    if isinstance(payload, dict):
+        force_mastery = bool(payload.get("force_mastery", False))
+
+        # Engine boundary hygiene: reject obvious HTTP/UI keys in payload
+    if isinstance(payload, dict):
+        forbidden_present = ENGINE_FORBIDDEN_PAYLOAD_KEYS.intersection(payload.keys())
+        if forbidden_present:
+            raise RuntimeError(
+                f"[V7 VIOLATION] Engine payload contains forbidden UI/HTTP keys: "
+                f"{sorted(forbidden_present)}"
+            )
+    # ---------------------------
+    # V7 FIX — STRUCTURED DOMAIN 0 LOCK (SINGLE AUTHORITY)
+    # ---------------------------
+    locked, reason = v7_lock_domain0_from_payload(state, payload or {})
+    if locked and expected_domain == "D0":
+        su = state.symbolic_universe.get("symbol_universe", [])
+        return {
+            "domain": "D0",
+            "phase": "PHASE_1",
+            "intent": "CONFIRMATION",
+            "introduced_new_symbols": False,
+            "repair_required": False,
+            "stability_assessment": "STABLE",
+            "text": "Symbolic universe confirmed. Domain 0 locked.",
+            "symbol_universe": su,
+            "symbols_used": su,
+            "next_domain_recommendation": "D0B",
+            "micro_check": {
+                "prompt": "Proceeding to Domain 0B.",
+                "expected_response_type": "conceptual",
+            },
+            "media_suggestions": [],
+        }
 
     if (
         isinstance(payload, dict)
         and payload.get("intent") == "D0_CONFIRM"
     ):
         confirmed = payload.get("confirmed_symbols")
-
         # V7 FIX #6 — confirmed symbols must come from extracted candidates
         candidates = state.domain0_candidate_symbols
-
         if not candidates:
             raise RuntimeError(
                 "[V7 VIOLATION] No candidate symbols available for confirmation"
@@ -652,7 +750,6 @@ def call_model_with_retry_v7(
         state.domain0_candidate_symbols.clear()
         state.domain0_complete = True
         state.last_intent = "D0_CONFIRM"
-
         return {
             "domain": "D0",
             "phase": "PHASE_1",
@@ -679,6 +776,49 @@ def call_model_with_retry_v7(
                 f"[V7 VIOLATION] Attempted to enter {expected_domain} "
                 "before Domain 0 confirmation"
             )
+    # -------------------------------------------------
+    # V7 --- DOMAIN 0B (ENGINE-OWNED, NO WEB LAYER DUPLICATION)
+    # -------------------------------------------------
+    # Domain 0B is a required trust-building / calibration extension. The web layer
+    # may forward answers via payload["micro_response"], but MUST NOT implement any
+    # Domain 0B state transitions itself.
+    if state.domain0_complete and v7_requires_domain0b(state):
+        # If the controller tries to skip D0B, the engine must short-circuit here.
+        if expected_domain not in ("D0", "D0B"):
+            return v7_domain0b_response(state)
+
+        # If we are in D0B, record the learner response (if provided) and return the next question.
+        if expected_domain == "D0B":
+            if isinstance(payload, dict):
+                micro = payload.get("micro_response")
+            else:
+                micro = None
+
+            if micro is not None and str(micro).strip():
+                v7_record_domain0b_answer(state, str(micro).strip())
+
+            resp = v7_domain0b_response(state)
+            if resp:
+                return resp
+
+            # Completed D0B on this turn → confirm and recommend D1.
+            su_now = state.symbolic_universe.get("symbol_universe", [])
+            return {
+                "domain": "D0B",
+                "phase": "PHASE_1",
+                "intent": "CONFIRMATION",
+                "introduced_new_symbols": False,
+                "repair_required": False,
+                "stability_assessment": "STABLE",
+                "text": "Domain 0B complete. Proceeding to Domain 1.",
+                "symbol_universe": su_now,
+                "symbols_used": su_now,
+                "next_domain_recommendation": "D1",
+                "advance_allowed": True,
+                "micro_check": None,
+                "media_suggestions": [],
+                "domain_path": v7_domain_path(),
+            }
 
     # Only record Domain 0 answers if NOT confirming
     if not state.domain0_complete and not (
@@ -762,6 +902,12 @@ def call_model_with_retry_v7(
             "Model failed V7 validation after retries: " + "; ".join(errors)
             )
 
+    # =====================================================
+    # V7 FIX 1 — SERVER OWNS DOMAIN + PHASE (HARD STAMP)
+    # =====================================================
+    parsed["domain"] = expected_domain
+    parsed["phase"] = normalize_phase_token(expected_phase)
+
     # --- FIX 6: Presence marker injection (CANONICAL) ---
     
     if (
@@ -778,8 +924,6 @@ def call_model_with_retry_v7(
         if marker:
             parsed["text"] = marker + "\n\n" + parsed.get("text", "")
     
-    # --- END FIX 6 ---
-
     # ---------------------------
     # V7 MASTERY MODE HARD GATE
     # ---------------------------
@@ -801,6 +945,13 @@ def call_model_with_retry_v7(
             parsed.get("stability_assessment") == "STABLE"
         )
 
+    # V7 ADVENTURE: track persistent instability across turns
+        if expected_domain not in ("D0", "D0B"):
+            if parsed.get("stability_assessment") == "STABLE":
+                state.consecutive_unstable_turns = 0
+            else:
+                state.consecutive_unstable_turns += 1
+
     # 2) Commit domain advancement (single authority)
     v7_set_state_domain_after_success(state, expected_domain)
 
@@ -812,8 +963,17 @@ def call_model_with_retry_v7(
     # V7 POST-SUCCESS ENFORCEMENT (ONCE)
     # ---------------------------
     v7_enforce_media_domain(parsed)
+
+    # V7 EVALUATION FLOOR (mode-independent, cannot be bypassed)
+    v7_enforce_evaluation_floor(state, parsed)
+
     _before = state.last_microcheck_passed
-    v7_apply_interaction_mode_constraints(state, parsed)
+    v7_apply_interaction_mode_constraints(
+        state,
+        parsed,
+        user_text=str(prompt),
+        force_mastery=force_mastery,
+    )
     _assert_no_lmp_mutation(state, _before)
 
     # Stamina gate: offer only after a stable, non-D0 turn
@@ -871,6 +1031,40 @@ def v7_domain0_response() -> dict:
 # ============================================================
 # V7 REQUIRED: DOMAIN 0 — RECORD + HARD GATE (NEW)
 # ============================================================
+def v7_lock_domain0_from_payload(state: CobraState, payload: dict) -> tuple[bool, str]:
+    """
+    V7 Domain 0 lock is deterministic and write-once.
+    Returns (locked, reason).
+    """
+    if getattr(state, "domain0_complete", False):
+        return (True, "Domain 0 already locked.")
+
+    want = payload.get("want_to_understand")
+    likes = payload.get("likes")
+    mode = payload.get("interaction_mode")
+
+    # normalize likes
+    if isinstance(likes, str):
+        likes = [x.strip() for x in likes.split(",") if x.strip()]
+
+    if not want or not isinstance(likes, list) or not likes:
+        return (False, "Missing want_to_understand or likes[]")
+
+    if mode not in ("learn", "adventure", "mastery"):
+        return (False, "Missing/invalid interaction_mode")
+
+    # lock (WRITE-ONCE)
+    state.interaction_mode = InteractionMode(mode)
+    state.symbolic_universe = {
+        "symbol_universe": [str(x).strip() for x in likes if str(x).strip()],
+        "domain0_raw": {
+            "want_to_understand": want,
+            "likes": likes,
+            "interaction_mode": mode,
+        },
+    }
+    state.domain0_complete = True
+    return (True, "Domain 0 locked from structured payload.")
 
 def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, str]:
     """
@@ -943,6 +1137,51 @@ def v7_record_domain0_answers(state: CobraState, user_text: str) -> tuple[bool, 
         return (False, "Domain 0 requires at least one symbol to proceed.")
 
     return (True, "Domain 0 input recorded.")
+
+def v7_lock_domain0_from_payload(state: CobraState, payload: dict) -> tuple[bool, str]:
+    """
+    V7 Domain 0 lock from structured payload.
+    - Uses explicit fields: want_to_understand, likes, interaction_mode.
+    - Write-once: if domain0_complete is already True, does nothing.
+    Returns (locked: bool, reason: str).
+    """
+    # Already locked → no-op
+    if getattr(state, "domain0_complete", False):
+        return True, "Domain 0 already locked."
+
+    if not isinstance(payload, dict):
+        return False, "No structured payload for Domain 0."
+
+    want = payload.get("want_to_understand")
+    likes = payload.get("likes")
+    mode = payload.get("interaction_mode")
+
+    # Normalize likes
+    if isinstance(likes, str):
+        likes = [s.strip() for s in likes.split(",") if s.strip()]
+
+    # Basic validation
+    if not want or not isinstance(likes, list) or not likes:
+        return False, "Missing want_to_understand or likes[]."
+
+    if mode not in ("learn", "adventure", "mastery"):
+        return False, "Missing or invalid interaction_mode."
+
+    cleaned = [str(s).strip() for s in likes if str(s).strip()]
+
+    # Lock into state.symbolic_universe
+    state.interaction_mode = InteractionMode(mode)
+    state.symbolic_universe = {
+        "symbol_universe": cleaned,
+        "domain0_raw": {
+            "want_to_understand": want,
+            "likes": likes,
+            "interaction_mode": mode,
+        },
+    }
+    state.domain0_complete = True
+
+    return True, "Domain 0 locked from structured payload."
 
 # ============================================================
 # V7 REQUIRED: DOMAIN 0B — AUDITORY SYMBOL MAP
@@ -1054,6 +1293,7 @@ def v7_consolidation_response(state: CobraState) -> dict:
         },
         "media_suggestions": []
     }
+
 # ============================================================
 # V7 REQUIRED: PHASE 1 TRANSFER / VERIFICATION GATE
 # ============================================================
@@ -1199,6 +1439,42 @@ def v7_expansion_prompt(state: CobraState) -> dict:
         },
         "media_suggestions": [],
     }
+MASTERY_ASSERTION_KEYWORDS = (
+    "i'm sure",
+    "i am sure",
+    "i already know",
+    "i know this",
+    "i'm confident",
+    "i am confident",
+)
+
+def v7_effective_mode(
+    state: CobraState,
+    user_text: str | None,
+    force_mastery: bool = False,
+) -> InteractionMode | None:
+    """
+    Mode boundary rule:
+    - Normally use state.interaction_mode.
+    - If the user explicitly asserts certainty/mastery (flag or text),
+      temporarily treat this turn as mastery.
+    """
+    # Structured override from controller/UI
+    if force_mastery:
+        return InteractionMode.mastery
+
+    base = state.interaction_mode
+
+    if not user_text:
+            return base
+
+    lowered = user_text.lower()
+
+    # Text-based certainty detection (temporary mastery escalation)
+    if any(k in lowered for k in MASTERY_ASSERTION_KEYWORDS):
+        return InteractionMode.mastery
+
+    return base
 
 # ============================================================
 # V7 REQUIRED: INTERACTION MODE BEHAVIOR ENFORCEMENT
@@ -1206,36 +1482,85 @@ def v7_expansion_prompt(state: CobraState) -> dict:
 
 def v7_apply_interaction_mode_constraints(
     state: CobraState,
-    parsed_response: dict
-):
+    parsed: dict,
+    user_text: str | None = None,
+    force_mastery: bool = False,
+) -> dict:
     """
-    Modifies enforcement behavior based on interaction_mode.
+    Modify enforcement behavior based on interaction_mode.
     This does NOT change domain order or truth conditions.
+    It only controls how aggressively we repair and whether we allow advance.
     """
-
     mode = state.interaction_mode
-    intent = parsed_response.get("intent")
+    intent = parsed.get("intent")
+    stable = (parsed.get("stability_assessment") == "STABLE")
+    repair_required = bool(parsed.get("repair_required"))
 
-    # LEARN MODE
-    if mode == InteractionMode.learn:
-        # allow mild imprecision; do not hard-block on first instability
-        if parsed_response.get("stability_assessment") == "UNSTABLE":
-            parsed_response["repair_required"] = True
-            parsed_response.setdefault("advance_allowed", False)
+    # Ensure the flag exists; default is to allow advance
+    if "advance_allowed" not in parsed:
+        parsed["advance_allowed"] = True
 
-    # ADVENTURE MODE
-    elif mode == InteractionMode.adventure:
-        # allow temporary instability unless it violates logic
-        if intent not in ("REPAIR", "MICRO_CHECK"):
-            parsed_response.setdefault("advance_allowed", True)
+    # If domain 0/0B, do not apply mode gates
+    domain = parsed.get("domain")
+    if domain in ("D0", "D0B"):
+        return parsed
 
-    # MASTERY MODE
-    elif mode == InteractionMode.mastery:
-        # strict: block advancement on ANY instability
-        if parsed_response.get("stability_assessment") != "STABLE":
+    # Mastery — strict: any instability blocks advance, forces repair
+    if mode == InteractionMode.mastery:
+        if (not stable) or repair_required or intent in ("REPAIR", "MICRO_CHECK"):
+            parsed["repair_required"] = True
+            parsed["advance_allowed"] = False
+        return parsed
+
+    # Adventure — allow divergence, but block if instability persists
+    if mode == InteractionMode.adventure:
+        # use the counter maintained in call_model_with_retry_v7
+        if (not stable) and getattr(state, "consecutive_unstable_turns", 0) >= 2:
+            parsed["repair_required"] = True
+            parsed["advance_allowed"] = False
+            return parsed
+
+        if intent in ("REPAIR", "MICRO_CHECK") or (not stable and repair_required):
+            parsed["advance_allowed"] = False
+        return parsed
+
+    # Learn (default / gentle)
+    if mode == InteractionMode.learn or mode is None:
+        if repair_required:
+            parsed["advance_allowed"] = False
+        return parsed
+   
+def v7_enforce_evaluation_floor(state: CobraState, parsed_response: dict) -> None:
+    """
+    V7 evaluation floor (mode-independent).
+
+    If the model output contains:
+    - factual / logical self-contradiction, or
+    - violations of the learner's own symbolic commitments,
+
+    then repair_required must be True and advance_allowed must be False,
+    regardless of interaction_mode.
+    """
+    text = (parsed_response.get("text") or "").strip()
+    if not text:
+        return
+
+    # 1) Symbolic commitment check: if symbols_used contradict the symbol_universe
+    su = state.symbolic_universe.get("symbol_universe", [])
+    used = parsed_response.get("symbols_used", [])
+    if isinstance(su, list) and isinstance(used, list) and su:
+        # Example: if response explicitly denies using the learner's own symbols
+        lowered = text.lower()
+        if "not my examples" in lowered or "not my symbols" in lowered:
             parsed_response["repair_required"] = True
             parsed_response["advance_allowed"] = False
+            return
 
-callmodelwithretryv7 = call_model_with_retry_v7
-v7statedomainlabel = v7_state_domain_label
+    # 2) Simple internal contradiction check (structural placeholder)
+    lowered = text.lower()
+    if ("i agree" in lowered and "i disagree" in lowered) or ("true" in lowered and "false" in lowered):
+        parsed_response["repair_required"] = True
+        parsed_response["advance_allowed"] = False
+        return
+
 

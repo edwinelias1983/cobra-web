@@ -191,7 +191,8 @@ DOMAIN_CONTRACTS = {
             "step-by-step explanation"
         ],
     },
-}
+
+    }  # ← END OF DOMAIN_CONTRACTS
 
 # ============================================================
 # PROMPT COMPILER — PHASE A
