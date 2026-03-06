@@ -1076,6 +1076,7 @@ def run_cobra(payload: dict):
             save_session_state(session_id, state)
 
             return {
+                "session_id": session_id,
                 "domain": "D0",
                 "phase": "PHASE_1",
                 "intent": "CONFIRMATION",
