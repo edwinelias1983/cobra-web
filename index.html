@@ -247,6 +247,9 @@ pre{
     <!-- ADDED: Rolling chat UI (separate from <pre>)           -->
     <!-- ===================================================== -->
     <div id="chat"></div>
+    <div id="skipDomain0B" style="display:none; margin-top:10px;">
+      <button class="primary" onclick="skipDomain0B()">Skip</button>
+    </div>
 
     <!-- NEW: COBRA domain output area -->
     <div id="cobra-output"></div>
@@ -432,6 +435,34 @@ async function sendChat(){
     addChatMessage("system", "ERROR: " + e.message);
   }
 }
+async function skipDomain0B(){
+
+  document.getElementById("thinkingIndicator").style.display = "block";
+
+  const payload = {
+    session_id: getSessionId(),
+    auditory_response: "skip",
+    prompt: "skip"
+  };
+
+  try {
+    const res = await fetch("/cobra/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    renderCobraResponse(data);
+    unlockChatIfReady(data);
+
+  } catch(e) {
+    addChatMessage("system", "ERROR: " + e.message);
+  }
+
+  document.getElementById("thinkingIndicator").style.display = "none";
+}
 
 function setInputLocked(locked){
   const bar = document.getElementById("chatInputBar");
@@ -527,10 +558,10 @@ function renderCobraResponse(data){
     const chat = document.getElementById("chat");
     chat.style.display = "block";
     chat.style.visibility = "visible";
-    addChatMessage("system", `[${data.domain}/${data.phase}/${data.intent}] ${data.text}`);
+    addChatMessage("system", data.text);
   }
 
-  // ⬇️ NEW: render Domain‑1 (and other) visual blocks when present
+  // NEW: render Domain‑1 (and other) visual blocks when present
   console.log("DOMAIN BLOCKS:", data.payload?.blocks);
 
   if (data.payload && Array.isArray(data.payload.blocks)) {
@@ -555,11 +586,9 @@ function renderCobraResponse(data){
   // =====================================================
   // Permanent unlock ONLY after D0 + D0B
   // =====================================================
-  if (!(data && data.domain === "D0" && data.intent === "REPAIR") &&
-      !(data && data.domain === "D0B")) {
+  if (!(data && data.domain === "D0" && data.intent === "REPAIR")) {
     unlockChatIfReady(data);
   }
-
   applyDomainGovernor(data);
 
   // EXPANSION INVITE UI: show/hide expansionChoices
@@ -569,6 +598,18 @@ function renderCobraResponse(data){
   } else if (expansionBox) {
     expansionBox.style.display = "none";
     expansionBox.innerHTML = "";
+  }
+  // ===============================
+  // DOMAIN 0B SKIP BUTTON
+  // ===============================
+  const skipBox = document.getElementById("skipDomain0B");
+
+  if (skipBox) {
+    if (data.domain === "D0B") {
+      skipBox.style.display = "block";
+    } else {
+      skipBox.style.display = "none";
+    }
   }
 }
 
@@ -645,7 +686,7 @@ async function begin(){
 }
 
 
-function renderBlocks(blocks) {
+function renderBlocks(blocks, domain) {
   const container = document.getElementById('cobra-output');
   if (!container) return;
 
@@ -664,7 +705,7 @@ function renderBlocks(blocks) {
       container.appendChild(p);
     }
 
-    if (block.type === 'image_row' && ['D1','D2'].includes(data.domain)) {
+    if (block.type === 'image_row' && ['D1','D2'].includes(data.domain) {
       const row = document.createElement('div');
       row.className = 'image-row';
       block.images.forEach(img => {
@@ -675,6 +716,7 @@ function renderBlocks(blocks) {
       });
       container.appendChild(row);
     }
+
 
     if (block.type === 'grouped_list') {
       const title = document.createElement('h3');
