@@ -53,8 +53,9 @@ def health():
 # ============================================================
 
 def get_db():
-    url = os.environ.get("DATABASE_URL", "").replace("postgres://", "postgresql://", 1)
+    url = os.environ.get("DATABASE_URL", "").strip().replace("postgres://", "postgresql://", 1)
     return psycopg2.connect(url)
+
 
 def init_db():
     with get_db() as conn:
