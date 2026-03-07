@@ -135,10 +135,8 @@ pre{
 /* ===================================================== */
 #chat {
   margin-top: 20px;
-  display: none; 
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  display: none;
+  padding: 0;
   background: transparent;
 }
 
@@ -176,8 +174,10 @@ pre{
 }
 
  #cobra-output {
-    margin-top: 24px;
-  }
+  margin-top: 24px;
+  min-height: 300px;
+  padding: 16px;
+}
 
   #cobra-output .image-row {
     display: flex;
@@ -248,7 +248,11 @@ pre{
     <!-- ===================================================== -->
     <div id="chat"></div>
     <div id="skipDomain0B" style="display:none; margin-top:10px;">
-      <button class="primary" onclick="skipDomain0B()">Skip</button>
+      <p style="opacity:0.7; font-size:0.9em; margin-bottom:8px;">
+        This helps COBRA match its tone and rhythm to your world. 
+        It's optional — skip it if you want to go straight in.
+      </p>
+      <button class="primary" onclick="skipDomain0B()">Skip this step →</button>
     </div>
 
     <!-- NEW: COBRA domain output area -->
