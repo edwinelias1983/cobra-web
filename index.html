@@ -668,8 +668,16 @@ async function begin(){
     // ✅ NEW: actually render the server response
     renderCobraResponse(data);
 
+     document.getElementById("thinkingIndicator").style.display = "none";
 
-    document.getElementById("thinkingIndicator").style.display = "none";
+    // Hide the Domain 0 form after successful submission
+    if (data && data.state && data.state.domain0_complete === true) {
+      const panel = document.querySelector(".panel");
+      if (panel) {
+        panel.querySelectorAll("textarea, select, label, small, button.primary")
+          .forEach(el => el.style.display = "none");
+      }
+    }
   
     // V7 RULE: Allow immediate retry during Domain 0 repair
     if (
