@@ -1050,25 +1050,32 @@ def run_cobra(payload: dict):
                 mode in ("learn", "adventure", "mastery")
             )
 
-            if domain0_ready:
-                confirmed = {
-                    "want_to_understand": want,
-                    "likes": likes,
-                    "interaction_mode": mode
-                }
-            else:
-                confirmed = None
-
             if not domain0_ready:
-                    # DEFER: Domain 0 incomplete; let call_model_with_retry_v7
-                    # decide the repair envelope using want/likes/interaction_mode.
-                    pass
+                return {
+                    "session_id": session_id,
+                    "domain": "D0",
+                    "phase": "PHASE_1",
+                    "intent": "QUESTION",
+                    "introduced_new_symbols": False,
+                    "repair_required": False,
+                    "stability_assessment": "UNKNOWN",
+                    "text": "Domain 0 incomplete. Please answer both questions and select a mode.",
+                    "symbols_used": [],
+                    "state": {"domain0_complete": False, "domain0b_complete": False, "phase2_active": False},
+                    "next_domain_recommendation": "D0",
+                    "media_suggestions": [],
+                    "micro_check": {"prompt": "Answer the questions above.", "expected_response_type": "conceptual"},
+                }
 
-            # ONLY REACHED IF domain0_ready == True
-            # DEFER: Domain 0 lock/confirmation to engine; keep confirmed for engine use.
+            confirmed = {
+                "want_to_understand": want,
+                "likes": likes,
+                "interaction_mode": mode
+            }
+
             state.symbolic_universe = {
-            "symbol_universe": confirmed["likes"],   # LIST[str]
-            "domain0_raw": confirmed                 # full record preserved
+                "symbol_universe": confirmed["likes"],
+                "domain0_raw": confirmed
             }
             # Do NOT set state.domain0_complete or return a D0 confirmation here.
             # Just fall through to the normal engine call.
