@@ -449,11 +449,9 @@ async function skipDomain0B(){
 
     const data = await res.json();
     renderCobraResponse(data);
-    unlockChatIfReady(data);
-
+    }
   } catch(e) {
     addChatMessage("system", "ERROR: " + e.message);
-  }
 
   document.getElementById("thinkingIndicator").style.display = "none";
 }
