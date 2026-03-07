@@ -310,6 +310,9 @@ pre{
 <script>
 let cobraInitialized = false;
 
+<script>
+let cobraInitialized = false;
+
 // =====================================================
 // CONSOLE / TEST HARNESS ENTRYPOINT (V7-SAFE)
 // =====================================================
@@ -339,12 +342,7 @@ function getSessionId(){
   return sid;
 }
 
-/* ===================================================== */
-/* ADDED: Chat helpers (append-only, auto-scroll)         */
-/* ===================================================== */
-
 function unlockChatIfReady(data){
-
   const chat = document.getElementById("chat");
   const bar = document.getElementById("chatInputBar");
 
@@ -360,7 +358,6 @@ function unlockChatIfReady(data){
     )
   ) {
     cobraInitialized = true;
-
     chat.style.display = "block";
     bar.style.display = "block";
 
@@ -386,7 +383,7 @@ function addChatMessage(role, text){
   }
 
   const chat = document.getElementById("chat");
-  chat.style.display = "block"; // ← REQUIRED
+  chat.style.display = "block";
 
   const div = document.createElement("div");
   div.className = "chatMsg " + role;
@@ -398,14 +395,11 @@ function addChatMessage(role, text){
   });
 }
 
-/* ===================================================== */
-/* ADDED: Send button handler (persistent input)          */
-/* Uses /cobra/run with session_id and prompt             */
-/* ===================================================== */
 function updateMode(val) {
   const modeSelect = document.getElementById("mode");
-    if (modeSelect) modeSelect.value = val;
-  }
+  if (modeSelect) modeSelect.value = val;
+}
+
 async function sendChat(){
   const input = document.getElementById("chatUserInput");
   const text = input.value.trim();
@@ -439,8 +433,8 @@ async function sendChat(){
     addChatMessage("system", "ERROR: " + e.message);
   }
 }
-async function skipDomain0B(){
 
+async function skipDomain0B(){
   document.getElementById("thinkingIndicator").style.display = "block";
 
   const payload = {
@@ -457,7 +451,6 @@ async function skipDomain0B(){
     });
 
     const data = await res.json();
-
     renderCobraResponse(data);
     unlockChatIfReady(data);
 
@@ -489,27 +482,23 @@ function applyDomainGovernor(data){
 
   if (!data || !data.domain) return;
 
-  // D0 QUESTION — system speaks, user listens
   if (data.domain === "D0" && data.intent === "QUESTION") {
     chat.style.display = "block";
     return;
   }
 
-  // MICRO-CHECK — lock everything else
   if (data.intent === "MICRO_CHECK") {
     chat.style.display = "block";
     microBox.style.display = "block";
     return;
   }
 
-  // D0 REPAIR — constrained interaction
   if (data.domain === "D0" && data.intent === "REPAIR") {
     chat.style.display = "block";
     bar.style.display = "block";
     return;
   }
 
-  // POST-D0 — normal operation, but only after D0B is also done
   if (data.state && data.state.domain0_complete === true && data.state.domain0b_complete === true) {
     chat.style.display = "block";
     bar.style.display = "block";
@@ -518,8 +507,6 @@ function applyDomainGovernor(data){
 
 function commitSymbolicUniverseOnce(data){
   if (!data || !data.state || data.state.domain0_complete !== true) return;
-
-  // Only commit once per session
   if (window.__symbolicUniverseLocked) return;
 
   window.__symbolicUniverse = {
@@ -532,15 +519,34 @@ function commitSymbolicUniverseOnce(data){
   window.__symbolicUniverseLocked = true;
 }
 
+async function sendDomain0BAnswer(){
+  const input = document.getElementById("d0bInput");
+  const text = input ? input.value.trim() : "";
+  if (!text) return;
+  addChatMessage("user", text);
+  input.value = "";
+  document.getElementById("thinkingIndicator").style.display = "block";
+  try {
+    const res = await fetch("/cobra/run", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ session_id: getSessionId(), micro_response: text })
+    });
+    const data = await res.json();
+    renderCobraResponse(data);
+  } catch(e){
+    addChatMessage("system","ERROR: "+e.message);
+  } finally {
+    document.getElementById("thinkingIndicator").style.display = "none";
+  }
+}
+
 function renderCobraResponse(data){
   window.__lastResponse = data;
 
   if (window.__symbolicUniverseLocked && data?.domain === "D0")
     console.error("V7 VIOLATION: UI attempted to re-enter Domain 0 after lock.");
 
-  // ===============================
-  // V7 HARD GATE: DOMAIN 0 REPAIR
-  // ===============================
   if (
     data &&
     data.domain === "D0" &&
@@ -549,15 +555,10 @@ function renderCobraResponse(data){
     data.state.domain0_complete === false
   ) {
     cobraInitialized = false;
-
-    // allow user to respond during Domain 0 repair
     document.getElementById("chat").style.display = "block";
     document.getElementById("chatInputBar").style.display = "block";
   }
 
-  // ===============================
-  // Render system text (all domains)
-  // ===============================
   if (typeof data.text === "string" && data.text.trim()) {
     const chat = document.getElementById("chat");
     chat.style.display = "block";
@@ -565,7 +566,6 @@ function renderCobraResponse(data){
     addChatMessage("system", data.text);
   }
 
-  // NEW: render Domain‑1 (and other) visual blocks when present
   console.log("DOMAIN BLOCKS:", data.payload?.blocks);
 
   if (data.payload && Array.isArray(data.payload.blocks)) {
@@ -574,9 +574,6 @@ function renderCobraResponse(data){
 
   console.log("renderCobraResponse domain/state:", data.domain, data.state);
 
-  // =====================================================
-  // MICRO-CHECK UI (authoritative)
-  // =====================================================
   const chatBar = document.getElementById("chatInputBar");
   const microBox = document.getElementById("microCheckBox");
 
@@ -587,14 +584,10 @@ function renderCobraResponse(data){
     microBox.style.display = "none";
   }
 
-  // =====================================================
-  // Permanent unlock ONLY after D0 + D0B
-  // =====================================================
   if (!(data && data.domain === "D0" && data.intent === "REPAIR")) {
-    }
+  }
   applyDomainGovernor(data);
 
-  // EXPANSION INVITE UI: show/hide expansionChoices
   const expansionBox = document.getElementById("expansionChoices");
   if (data.intent === "EXPANSION_INVITE") {
     showExpansionChoices();
@@ -602,14 +595,28 @@ function renderCobraResponse(data){
     expansionBox.style.display = "none";
     expansionBox.innerHTML = "";
   }
+
   // ===============================
-  // DOMAIN 0B SKIP BUTTON
+  // DOMAIN 0B SKIP BUTTON + INPUT
   // ===============================
   const skipBox = document.getElementById("skipDomain0B");
 
   if (skipBox) {
     if (data.domain === "D0B") {
       skipBox.style.display = "block";
+      if (!document.getElementById("d0bInput")) {
+        const textarea = document.createElement("textarea");
+        textarea.id = "d0bInput";
+        textarea.rows = 2;
+        textarea.style.cssText = "width:100%;margin-top:10px;background:transparent;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:10px;box-sizing:border-box;";
+        textarea.placeholder = "Type your answer here...";
+        const sendBtn = document.createElement("button");
+        sendBtn.className = "primary";
+        sendBtn.textContent = "Send →";
+        sendBtn.onclick = sendDomain0BAnswer;
+        skipBox.insertBefore(sendBtn, skipBox.querySelector("button"));
+        skipBox.insertBefore(textarea, sendBtn);
+      }
     } else {
       skipBox.style.display = "none";
     }
@@ -630,26 +637,25 @@ async function begin(){
       "system",
       "Domain 0 incomplete. You must answer both questions and select an interaction mode."
     );
-    return; // 🔴 REQUIRED
+    return;
   }
 
-   console.log("PROBE B"); 
+  console.log("PROBE B");
 
-  // Hide static instructional note as soon as COBRA begins
   const staticNote = document.getElementById("staticSymbolNote");
   if (staticNote) staticNote.style.display = "none";
 
   document.getElementById("thinkingIndicator").style.display = "block";
-    const payload = {
-      session_id: getSessionId(),
-      interaction_mode: mode,
-      want_to_understand: q1,
-      likes: q2.split(",").map(s => s.trim())
+
+  const payload = {
+    session_id: getSessionId(),
+    interaction_mode: mode,
+    want_to_understand: q1,
+    likes: q2.split(",").map(s => s.trim())
   };
 
-  /* ADD THIS LINE */
   window.__lastPayload = payload;
-  
+
   console.log("EVIDENCE-1 payload:", payload);
 
   try{
@@ -661,14 +667,12 @@ async function begin(){
 
     console.log("FETCH OK, status:", res.status);
 
-    const data = await res.json(); 
+    const data = await res.json();
 
-    // ✅ NEW: actually render the server response
     renderCobraResponse(data);
 
-     document.getElementById("thinkingIndicator").style.display = "none";
+    document.getElementById("thinkingIndicator").style.display = "none";
 
-    // Hide the Domain 0 form after successful submission
     if (data && data.state && data.state.domain0_complete === true) {
       ["q1", "q2", "mode", "voice"].forEach(id => {
         const el = document.getElementById(id);
@@ -676,20 +680,14 @@ async function begin(){
       });
       const beginBtn = document.querySelector("button.primary[onclick='begin()']");
       if (beginBtn) beginBtn.style.display = "none";
-      document.querySelectorAll("label, small").forEach(el => el.style.display = "none");
     }
-  
-    // V7 RULE: Allow immediate retry during Domain 0 repair
-    if (
-      data &&
-      data.state &&
-      data.state.domain0_complete === false
-    ) {
+
+    if (data && data.state && data.state.domain0_complete === false) {
       btn.disabled = false;
       btn.textContent = "Begin";
     }
 
-    } catch(e){
+  } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
     addChatMessage("system", "ERROR: " + e.message);
   } finally{
@@ -697,7 +695,6 @@ async function begin(){
     btn.textContent = "Begin";
   }
 }
-
 
 function renderBlocks(blocks, domain) {
   const container = document.getElementById('cobra-output');
@@ -723,13 +720,12 @@ function renderBlocks(blocks, domain) {
       row.className = 'image-row';
       block.images.forEach(img => {
         const imgEl = document.createElement('img');
-        imgEl.src = img.src;          // single, URL‑ready src
+        imgEl.src = img.src;
         imgEl.alt = img.alt || '';
         row.appendChild(imgEl);
       });
       container.appendChild(row);
     }
-
 
     if (block.type === 'grouped_list') {
       const title = document.createElement('h3');
@@ -757,7 +753,6 @@ async function submitMicroCheck(){
   const response = document.getElementById("microResponse").value.trim();
   if (!response) return;
 
-  /* ADDED: show user micro-check response in rolling chat */
   addChatMessage("user", response);
 
   document.getElementById("microCheckBox").style.display = "none";
@@ -781,8 +776,6 @@ async function submitMicroCheck(){
 
   } catch(e){
     document.getElementById("thinkingIndicator").style.display = "none";
-
-    /* ADDED: also show error in rolling chat */
     addChatMessage("system", "ERROR: " + e.message);
   }
 }
@@ -792,10 +785,7 @@ function showExpansionChoices() {
   const box = document.getElementById("expansionChoices");
   if (!bar || !box) return;
 
-  // Hide normal text input while they choose
   bar.style.display = "none";
-
-  // Put three buttons into the expansion box
   box.innerHTML = "";
 
   const choices = [
@@ -809,7 +799,6 @@ function showExpansionChoices() {
     btn.className = "primary";
     btn.style.marginRight = "8px";
     btn.textContent = label;
-    // we will define handleExpansionTopChoice later
     btn.onclick = () => handleExpansionTopChoice(label);
     box.appendChild(btn);
   });
@@ -821,7 +810,6 @@ async function handleExpansionTopChoice(label) {
   const box = document.getElementById("expansionChoices");
   if (!box) return;
 
-  // If they want a new topic, reuse normal chat input
   if (label === "I want to learn something new") {
     box.innerHTML = "Type what you want to understand next in the chat box.";
     box.style.display = "block";
@@ -836,7 +824,6 @@ async function handleExpansionTopChoice(label) {
     return;
   }
 
-  // Otherwise send their choice as micro_response to /cobra/run
   document.getElementById("thinkingIndicator").style.display = "block";
   box.style.display = "none";
 
@@ -859,6 +846,7 @@ async function handleExpansionTopChoice(label) {
     document.getElementById("thinkingIndicator").style.display = "none";
   }
 }
+
 // =====================================================
 // ADDED: Enter-to-send behavior (ChatGPT-style)
 // Enter = send, Shift+Enter = newline
